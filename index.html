@@ -30,17 +30,41 @@
 #hotbar .hotbar-slot.drag-source{opacity:.38}
 #dragGhost{position:fixed;left:0;top:0;transform:translate(-50%,-50%);pointer-events:none;display:none;background:#454b3c;border:2px solid #e2cc8c;border-radius:8px;padding:9px;font-size:25px;z-index:100;box-shadow:0 8px 22px #0008}
 #interaction{max-height:44vh;overflow-y:auto}
+#storageOverlay{position:fixed;inset:0;z-index:30;background:#091713b8;display:none;align-items:center;justify-content:center;padding:16px;touch-action:none}
+#storageWindow{background:#24352af5;border:2px solid #a0a688;border-radius:14px;width:min(430px,100%);max-height:88vh;overflow-y:auto;padding:16px;box-shadow:0 18px 48px #000a;color:#f5f1dd;touch-action:pan-y}
+.storage-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.storage-head h2{font-size:17px;margin:0}
+#storageClose{font-size:20px;min-width:38px;padding:6px 10px}
+.storage-caption{color:#bdc9b9;font-size:12px;margin:8px 0 11px}
+.storage-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:8px 0 16px}
+.storage-slot{position:relative;aspect-ratio:1;border:2px solid #717b6c;border-radius:5px;background:#485246;display:flex;align-items:center;justify-content:center;font-size:23px;padding:0;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.storage-slot .qty{position:absolute;right:3px;bottom:1px;font-size:12px;font-weight:800;text-shadow:0 2px 3px #000}
+.storage-slot .slot-index{position:absolute;left:3px;top:2px;font-size:10px;color:#abb5a6}
+.storage-slot.drag-source{opacity:.4}
+.storage-slot.transfer-selected{border-color:#ffe399;box-shadow:0 0 0 1px #ffe399}
+#storageHint{font-size:11px;line-height:1.4;color:#cfddce}
+#dragGhost{z-index:100}
+
 #interactionActions button{flex-shrink:0}
 @media(max-width:370px){#guide{display:none}#pad{width:112px;height:112px}#knob{width:42px;height:42px}}
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:10px">v1.1</small></h1><p>A home in the forest · camp storage</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:10px">v1.2</small></h1><p>A home in the forest · inventory containers</p></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
 <div id="pad" aria-label="Movement joystick"><div id="knob"></div></div>
 <div id="buttons"><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button></div><div id="hotbar" aria-label="Five inventory slots"></div><div id="dragGhost" aria-hidden="true"></div>
 <section id="interaction" aria-live="polite"><strong id="interactionName"></strong><p id="interactionInfo"></p><div id="interactionActions"></div><div id="chopProgress"><div id="chopFill"></div></div></section><div id="toast" role="status"></div>
-<div id="status">Growing the woodland...</div><div id="diag" style="position:absolute;top:76px;left:16px;border-radius:8px;background:#123a37c9;color:#fff;font:11px monospace;padding:7px;pointer-events:none">Starting renderer...</div>
+<div id="storageOverlay" role="dialog" aria-modal="true" aria-label="Storage inventory">
+ <div id="storageWindow">
+  <div class="storage-head"><h2 id="storageTitle">Storage</h2><button type="button" id="storageClose" aria-label="Close storage">×</button></div>
+  <p class="storage-caption" id="storageCapacity"></p>
+  <div class="storage-grid" id="storageSlots"></div>
+  <h2 style="font-size:14px;margin:6px 0">Your inventory</h2>
+  <div class="storage-grid" id="storagePlayerSlots"></div>
+  <div id="storageHint">Drag items between slots, or tap an item and then tap its destination. Matching stacks merge up to 10.</div>
+ </div>
+</div><div id="status">Growing the woodland...</div><div id="diag" style="position:absolute;top:76px;left:16px;border-radius:8px;background:#123a37c9;color:#fff;font:11px monospace;padding:7px;pointer-events:none">Starting renderer...</div>
 <script>
 (function(){
 'use strict';
@@ -260,153 +284,249 @@ try{const saved=JSON.parse(localStorage.getItem('woodland-camp-objects-v1')||'nu
 function saveWorld(){try{localStorage.setItem('woodland-camp-objects-v1',JSON.stringify(world));}catch(e){}}
 // Shared container data: wood rack holds 100 logs as 10 stacks of 10.
 // General storage accepts any currently defined inventory item.
-const containersKey='woodland-camp-containers-v1';
-let containers={logs:0,general:{food:Math.max(0,world.storedFood),axe:0,wood:0}};
+const containersKey='woodland-camp-containers-v2';
+const inventoryKey='woodland-camp-hotbar-v1';
+const validItems=['food','axe','wood'];
+const MAX_STACK=10;
+function newSlots(count){return Array.from({length:count},()=>null);}
+function itemIcon(id){return id==='axe'?'🪓':id==='wood'?'🪵':'🍎';}
+function namedItem(id){return id==='wood'?'wood':id==='axe'?'axes':'food';}
+function insertQuantity(slots,id,quantity){
+ if(!validItems.includes(id)||!Number.isSafeInteger(quantity)||quantity<0)return 0;
+ let remaining=quantity;
+ for(const slot of slots)if(slot&&slot.id===id&&remaining>0){
+  const n=Math.min(MAX_STACK-slot.qty,remaining);slot.qty+=n;remaining-=n;
+ }
+ for(let i=0;i<slots.length&&remaining>0;i++)if(!slots[i]){
+  const n=Math.min(MAX_STACK,remaining);slots[i]={id,qty:n};remaining-=n;
+ }
+ return remaining;
+}
+function slotCount(slots,id){return slots.reduce((n,slot)=>n+(slot?.id===id?slot.qty:0),0);}
+function freeCapacity(slots,id){return slots.reduce((n,slot)=>n+(!slot?MAX_STACK:slot.id===id?MAX_STACK-slot.qty:0),0);}
+function validSlot(value){return !!value&&validItems.includes(value.id)&&Number.isSafeInteger(value.qty)&&value.qty>0;}
+function migrateSlots(raw,count){
+ const result=newSlots(count),overflow={food:0,axe:0,wood:0};
+ if(Array.isArray(raw))for(const item of raw)if(validSlot(item))overflow[item.id]+=item.qty;
+ for(const id of validItems)overflow[id]=insertQuantity(result,id,overflow[id]);
+ return {slots:result,overflow};
+}
+let inventory=newSlots(5);
+let legacyOverflow={food:0,axe:0,wood:0};
+try{
+ const raw=JSON.parse(localStorage.getItem(inventoryKey)||'null');
+ if(Array.isArray(raw)){
+  const converted=migrateSlots(raw,5);inventory=converted.slots;legacyOverflow=converted.overflow;
+ }else insertQuantity(inventory,'food',Math.max(0,world.looseFood));
+}catch(e){insertQuantity(inventory,'food',Math.max(0,world.looseFood));}
+let containerSlots={logs:newSlots(10),general:newSlots(20)};
+let unplacedLegacy={food:0,axe:0,wood:0};
 try{
  const saved=JSON.parse(localStorage.getItem(containersKey)||'null');
- if(saved&&typeof saved==='object'){
-  if(Number.isSafeInteger(saved.logs))containers.logs=Math.max(0,Math.min(100,saved.logs));
-  if(saved.general&&typeof saved.general==='object')
-    for(const k of ['food','axe','wood'])if(Number.isSafeInteger(saved.general[k]))
-      containers.general[k]=Math.max(0,saved.general[k]);
- }
-}catch(e){}
-function saveContainers(){
- world.storedFood=containers.general.food;saveWorld();
- try{localStorage.setItem(containersKey,JSON.stringify(containers));}catch(e){}
-}
-function namedItem(id){return id==='wood'?'wood':id==='axe'?'axes':'food';}
-function generalTotal(){return Object.values(containers.general).reduce((a,b)=>a+b,0);}
-
-// Each browser visitor has an independent five-slot local inventory.
-// Axes are stackable, so the stationary axe can be claimed indefinitely.
-const inventoryKey='woodland-camp-hotbar-v1';
-let inventory=[{id:'food',qty:Math.max(0,world.looseFood)},null,null,null,null];
-try{
- const saved=JSON.parse(localStorage.getItem(inventoryKey)||'null');
- if(Array.isArray(saved)&&saved.length===5){
-   inventory=saved.map(item=>item&&['food','axe','wood'].includes(item.id)&&Number.isSafeInteger(item.qty)&&item.qty>0?{id:item.id,qty:item.id==='wood'?Math.min(10,item.qty):item.qty}:null);
- }
-}catch(e){}
-let selectedSlot=0;
-function saveInventory(){try{localStorage.setItem(inventoryKey,JSON.stringify(inventory));}catch(e){}}
-function itemQuantity(id){return inventory.reduce((n,slot)=>n+(slot&&slot.id===id?slot.qty:0),0);}
-function woodCapacity(){
- return inventory.reduce((n,slot)=>n+(!slot?10:slot.id==='wood'?10-slot.qty:0),0);
-}
-function addItem(id,quantity=1){
- if(!['axe','food','wood'].includes(id)||!Number.isSafeInteger(quantity)||quantity<1)return false;
- if(id==='wood'){
-  if(woodCapacity()<quantity)return false;
-  let left=quantity;
-  for(let i=0;i<inventory.length&&left>0;i++){
-    if(inventory[i]&&inventory[i].id!=='wood')continue;
-    const available=inventory[i]?10-inventory[i].qty:10;
-    if(available<=0)continue;
-    const add=Math.min(available,left);
-    if(!inventory[i])inventory[i]={id:'wood',qty:add};else inventory[i].qty+=add;
-    left-=add;
+ if(saved&&Array.isArray(saved.logs)&&Array.isArray(saved.general)){
+  // Valid saved arrays stay in their exact slots; corrupt/oversized stacks are normalized.
+  for(const id of ['logs','general']){
+   const source=saved[id],target=newSlots(id==='logs'?10:20);
+   if(source.length===target.length&&source.every(v=>v===null||validSlot(v)&&v.qty<=10&&(id!=='logs'||v.id==='wood'))){
+    containerSlots[id]=source.map(v=>v?{id:v.id,qty:v.qty}:null);
+   }else{
+    const result=migrateSlots(source,target.length);
+    containerSlots[id]=target.map((_,i)=>result.slots[i]);
+    for(const k of validItems)unplacedLegacy[k]+=result.overflow[k];
+   }
   }
-  saveInventory();renderHotbar();return true;
+ }else throw Error('No v2 storage');
+}catch(e){
+ try{
+  const old=JSON.parse(localStorage.getItem('woodland-camp-containers-v1')||'null');
+  if(old&&typeof old==='object'){
+   if(Number.isSafeInteger(old.logs))unplacedLegacy.wood+=Math.max(0,old.logs);
+   if(old.general&&typeof old.general==='object')
+    for(const id of validItems)if(Number.isSafeInteger(old.general[id]))
+      unplacedLegacy[id]+=Math.max(0,old.general[id]);
+  }else unplacedLegacy.food+=Math.max(0,world.storedFood);
+ }catch(err){unplacedLegacy.food+=Math.max(0,world.storedFood);}
+ for(const id of validItems)unplacedLegacy[id]+=legacyOverflow[id];
+ unplacedLegacy.wood=insertQuantity(containerSlots.logs,'wood',unplacedLegacy.wood);
+ for(const id of validItems)unplacedLegacy[id]=insertQuantity(containerSlots.general,id,unplacedLegacy[id]);
+ // Do not discard pre-existing unusually large stacks. Extend the general
+ // chest for legacy overflow only, preserving every item.
+ for(const id of validItems)while(unplacedLegacy[id]>0){
+  const n=Math.min(MAX_STACK,unplacedLegacy[id]);containerSlots.general.push({id,qty:n});unplacedLegacy[id]-=n;
  }
- let index=inventory.findIndex(s=>s&&s.id===id&&s.qty<=Number.MAX_SAFE_INTEGER-quantity);
- if(index<0)index=inventory.findIndex(s=>s===null);
- if(index<0)return false;
- if(inventory[index])inventory[index].qty+=quantity;else inventory[index]={id,qty:quantity};
- world.looseFood=itemQuantity('food');
- saveInventory();saveWorld();renderHotbar();return true;
+}
+let selectedSlot=0;
+function saveInventory(){
+ world.looseFood=slotCount(inventory,'food');saveWorld();
+ try{localStorage.setItem(inventoryKey,JSON.stringify(inventory));}catch(e){}
+}
+function saveContainers(){
+ world.storedFood=slotCount(containerSlots.general,'food');saveWorld();
+ try{localStorage.setItem(containersKey,JSON.stringify(containerSlots));}catch(e){}
+}
+function itemQuantity(id){return slotCount(inventory,id);}
+function woodCapacity(){return freeCapacity(inventory,'wood');}
+function hasSpaceFor(id){return freeCapacity(inventory,id)>0;}
+function addItem(id,quantity=1){
+ if(!validItems.includes(id)||!Number.isSafeInteger(quantity)||quantity<1||freeCapacity(inventory,id)<quantity)return false;
+ if(insertQuantity(inventory,id,quantity)!==0)return false;
+ inventoryUpdated();return true;
 }
 function removeFromSlot(index,quantity){
- const slot=inventory[index];
- if(!slot||quantity<1||slot.qty<quantity)return false;
- slot.qty-=quantity;if(slot.qty===0)inventory[index]=null;
- world.looseFood=itemQuantity('food');saveInventory();saveWorld();renderHotbar();return true;
+ const slot=inventory[index];if(!slot||quantity<1||quantity>slot.qty)return false;
+ slot.qty-=quantity;if(!slot.qty)inventory[index]=null;inventoryUpdated();return true;
 }
 function removeItem(id,quantity=1){
- if(itemQuantity(id)<quantity)return false;
- let remaining=quantity;
- for(let i=0;i<5&&remaining>0;i++){
-  if(inventory[i]?.id!==id)continue;
-  const n=Math.min(inventory[i].qty,remaining);inventory[i].qty-=n;remaining-=n;
+ if(itemQuantity(id)<quantity||quantity<1)return false;
+ let left=quantity;
+ for(let i=0;i<inventory.length&&left>0;i++)if(inventory[i]?.id===id){
+  const n=Math.min(left,inventory[i].qty);inventory[i].qty-=n;left-=n;
   if(inventory[i].qty===0)inventory[i]=null;
  }
- world.looseFood=itemQuantity('food');
- saveInventory();saveWorld();renderHotbar();return true;
+ inventoryUpdated();return true;
 }
-const hotbar=document.getElementById('hotbar');
+function inventoryUpdated(){
+ saveInventory();renderHotbar();if(storageOpen)renderStorageWindow();
+}
+function containerCapacity(name){return containerSlots[name].length*MAX_STACK;}
+const hotbar=document.getElementById('hotbar'),dragGhost=document.getElementById('dragGhost');
+const storageOverlay=document.getElementById('storageOverlay'),
+storageTitle=document.getElementById('storageTitle'),
+storageCapacity=document.getElementById('storageCapacity'),
+storageSlots=document.getElementById('storageSlots'),
+storagePlayerSlots=document.getElementById('storagePlayerSlots');
+let storageOpen=null,transferPick=null,dragState=null;
+function slotMarkup(slot,index,area){
+ const btn=document.createElement('button');btn.type='button';
+ btn.className=area==='hotbar'?'hotbar-slot':'storage-slot';
+ if(area==='hotbar'&&index===selectedSlot)btn.classList.add('selected');
+ btn.dataset.area=area;btn.dataset.index=String(index);
+ btn.setAttribute('aria-label',area+' slot '+(index+1)+(slot?': '+slot.qty+' '+slot.id:': empty'));
+ if(area==='hotbar'){
+  const num=document.createElement('span');num.className='num';num.textContent=String(index+1);btn.appendChild(num);
+ }else if(area==='logs'&&slot===null){
+  const num=document.createElement('span');num.className='slot-index';num.textContent=String(index+1);btn.appendChild(num);
+ }
+ if(slot){
+  const icon=document.createElement('span');icon.textContent=itemIcon(slot.id);btn.appendChild(icon);
+  const qty=document.createElement('span');qty.className='qty';qty.textContent=String(slot.qty);btn.appendChild(qty);
+ }
+ if(transferPick&&transferPick.area===area&&transferPick.index===index)btn.classList.add('transfer-selected');
+ return btn;
+}
 function renderHotbar(){
  if(dragState?.active)return;
  hotbar.replaceChildren();
- inventory.forEach((slot,i)=>{
-  const btn=document.createElement('button');btn.className='hotbar-slot'+(i===selectedSlot?' selected':'');
-  btn.type='button';btn.setAttribute('aria-label','Slot '+(i+1)+': '+(slot?slot.qty+' '+slot.id:'empty'));
-  const num=document.createElement('span');num.className='num';num.textContent=String(i+1);btn.appendChild(num);
-  if(slot){
-   const icon=document.createElement('span');icon.textContent=slot.id==='axe'?'🪓':slot.id==='wood'?'🪵':'🍎';btn.appendChild(icon);
-   const count=document.createElement('span');count.className='qty';count.textContent=String(slot.qty);btn.appendChild(count);
-  }
-  btn.dataset.slot=String(i);
-  hotbar.appendChild(btn);
- });
+ inventory.forEach((slot,i)=>hotbar.appendChild(slotMarkup(slot,i,'hotbar')));
 }
-// Long-press on mobile and click-drag on desktop, with a shared pointer path.
-let dragState=null;
-const dragGhost=document.getElementById('dragGhost');
-function setSelectedSlot(i){selectedSlot=i;renderHotbar();updateNearby();renderInteraction();}
-function moveDragGhost(x,y){dragGhost.style.left=x+'px';dragGhost.style.top=y+'px';}
-function finishDrag(e,cancel=false){
- if(!dragState||e.pointerId!==dragState.pointerId)return;
- const state=dragState;dragState=null;
- if(state.timer)clearTimeout(state.timer);
- dragGhost.style.display='none';
- hotbar.querySelectorAll('.drag-source').forEach(b=>b.classList.remove('drag-source'));
- if(state.active&&!cancel){
-  const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('.hotbar-slot');
-  const dest=target?Number(target.dataset.slot):-1;
-  if(dest>=0&&dest<5&&dest!==state.source){
-   const from=inventory[state.source],to=inventory[dest];
-   if(from){
-    if(to?.id==='wood'&&from.id==='wood'){
-     const space=10-to.qty;const moved=Math.min(space,from.qty);
-     if(moved>0){to.qty+=moved;from.qty-=moved;if(from.qty===0)inventory[state.source]=null;}
-     else [inventory[state.source],inventory[dest]]=[inventory[dest],inventory[state.source]];
-    }else [inventory[state.source],inventory[dest]]=[inventory[dest],inventory[state.source]];
-    saveInventory();
-   }
-  }
- }else if(!state.active&&!cancel)setSelectedSlot(state.source);
- renderHotbar();
- updateNearby();renderInteraction();
+function renderStorageWindow(){
+ if(!storageOpen)return;
+ const slots=containerSlots[storageOpen],isLogs=storageOpen==='logs';
+ storageTitle.textContent=isLogs?'🪵 Log store':'📦 General storage';
+ const amount=slots.reduce((n,slot)=>n+(slot?.qty||0),0);
+ storageCapacity.textContent=isLogs?amount+'/100 wood · 10 stacks maximum':'Items: '+amount+' · '+slots.length+' slots · 10 per stack';
+ storageSlots.replaceChildren();storagePlayerSlots.replaceChildren();
+ slots.forEach((slot,i)=>storageSlots.appendChild(slotMarkup(slot,i,storageOpen)));
+ inventory.forEach((slot,i)=>storagePlayerSlots.appendChild(slotMarkup(slot,i,'player')));
 }
-hotbar.addEventListener('pointerdown',e=>{
- const btn=e.target.closest('.hotbar-slot');
- if(!btn||dragState)return;
- const source=Number(btn.dataset.slot);
- if(!Number.isInteger(source))return;
- dragState={source,pointerId:e.pointerId,x:e.clientX,y:e.clientY,active:false,
-  touch:e.pointerType==='touch',timer:null};
- const st=dragState;
- if(st.touch){
-  st.timer=setTimeout(()=>{if(dragState!==st||!inventory[source])return;startDrag(st);},370);
- }else if(inventory[source])startDrag(st);
- function startDrag(state){
-  state.active=true;dragGhost.textContent=inventory[source].id==='axe'?'🪓':inventory[source].id==='wood'?'🪵':'🍎';
-  dragGhost.style.display='block';btn.classList.add('drag-source');moveDragGhost(state.x,state.y);
+function showStorage(name){
+ if(!containerSlots[name])return {ok:false,message:'Storage does not exist.'};
+ storageOpen=name;transferPick=null;storageOverlay.style.display='flex';
+ renderStorageWindow();renderHotbar();return {ok:true,message:'Opened storage.'};
+}
+function closeStorage(){
+ if(dragState){if(dragState.timer)clearTimeout(dragState.timer);dragState=null;dragGhost.style.display='none';}
+ storageOpen=null;transferPick=null;storageOverlay.style.display='none';renderHotbar();
+}
+document.getElementById('storageClose').addEventListener('click',closeStorage);
+storageOverlay.addEventListener('pointerdown',e=>{if(e.target===storageOverlay)closeStorage();});
+function arrayForArea(area){
+ if(area==='hotbar'||area==='player')return inventory;
+ return containerSlots[area]||null;
+}
+function transferSlot(from,to){
+ const a=arrayForArea(from.area),b=arrayForArea(to.area);
+ if(!a||!b||from.index<0||to.index<0||from.index>=a.length||to.index>=b.length)return false;
+ if(a===b&&from.index===to.index)return false;
+ const source=a[from.index],dest=b[to.index];
+ if(!source)return false;
+ // The log rack must never contain anything other than wood.
+ if(to.area==='logs'&&source.id!=='wood')return false;
+ if(from.area==='logs'&&dest&&dest.id!=='wood')return false;
+ if(dest&&dest.id===source.id){
+  const n=Math.min(MAX_STACK-dest.qty,source.qty);
+  if(n<=0)return false;
+  dest.qty+=n;source.qty-=n;if(source.qty===0)a[from.index]=null;
+ }else{
+  a[from.index]=dest?{...dest}:null;
+  b[to.index]={...source};
  }
- try{hotbar.setPointerCapture(e.pointerId);}catch(err){}
+ saveInventory();saveContainers();renderHotbar();renderStorageWindow();updateNearby();renderInteraction();
+ return true;
+}
+function makeRef(target){
+ const b=target?.closest('.hotbar-slot,.storage-slot');if(!b)return null;
+ return {area:b.dataset.area,index:Number(b.dataset.index)};
+}
+function clickSlot(ref){
+ if(!ref)return;
+ if(!storageOpen){if(ref.area==='hotbar'){selectedSlot=ref.index;renderHotbar();updateNearby();renderInteraction();}return;}
+ if(!transferPick){
+  const slots=arrayForArea(ref.area);if(slots?.[ref.index]){transferPick=ref;renderStorageWindow();}
+ }else{
+  if(transferPick.area===ref.area&&transferPick.index===ref.index)transferPick=null;
+  else if(transferSlot(transferPick,ref))transferPick=null;
+  else {showToast('That item cannot go in this slot.');transferPick=null;}
+  renderStorageWindow();
+ }
+}
+function startItemDrag(state,btn){
+ const slot=arrayForArea(state.ref.area)?.[state.ref.index];
+ if(!slot)return;
+ state.active=true;
+ dragGhost.textContent=itemIcon(slot.id);
+ dragGhost.style.display='block';btn.classList.add('drag-source');
+ dragGhost.style.left=state.x+'px';dragGhost.style.top=state.y+'px';
+}
+function beginPointer(e){
+ const btn=e.target.closest('.hotbar-slot,.storage-slot');
+ if(!btn||dragState)return;
+ const ref=makeRef(btn),slot=arrayForArea(ref.area)?.[ref.index];
+ const state={pointerId:e.pointerId,ref,x:e.clientX,y:e.clientY,active:false,timer:null};
+ dragState=state;
+ if(e.pointerType==='touch'){
+  if(slot)state.timer=setTimeout(()=>{if(dragState===state)startItemDrag(state,btn);},350);
+ }else if(slot)startItemDrag(state,btn);
+ try{btn.setPointerCapture(e.pointerId);}catch(err){}
  e.preventDefault();
-});
-hotbar.addEventListener('pointermove',e=>{
+}
+function movePointer(e){
  if(!dragState||dragState.pointerId!==e.pointerId)return;
- dragState.x=e.clientX;dragState.y=e.clientY;
- if(dragState.active)moveDragGhost(e.clientX,e.clientY);
-});
-hotbar.addEventListener('pointerup',e=>finishDrag(e));
-hotbar.addEventListener('pointercancel',e=>finishDrag(e,true));
-window.addEventListener('blur',()=>{if(dragState){dragGhost.style.display='none';if(dragState.timer)clearTimeout(dragState.timer);dragState=null;renderHotbar();}});
-renderHotbar();
-world.looseFood=itemQuantity('food');
-saveWorld();
+ const st=dragState;st.x=e.clientX;st.y=e.clientY;
+ if(st.active){dragGhost.style.left=st.x+'px';dragGhost.style.top=st.y+'px';}
+}
+function endPointer(e,cancel=false){
+ if(!dragState||dragState.pointerId!==e.pointerId)return;
+ const st=dragState;dragState=null;
+ if(st.timer)clearTimeout(st.timer);
+ dragGhost.style.display='none';
+ document.querySelectorAll('.drag-source').forEach(b=>b.classList.remove('drag-source'));
+ if(!cancel){
+  if(st.active){
+   const target=makeRef(document.elementFromPoint(e.clientX,e.clientY));
+   if(target&&!transferSlot(st.ref,target))showToast('Cannot move that item there.');
+  }else clickSlot(st.ref);
+ }
+ renderHotbar();renderStorageWindow();
+}
+for(const root of [hotbar,storageSlots,storagePlayerSlots]){
+ root.addEventListener('pointerdown',beginPointer);
+ root.addEventListener('pointermove',movePointer);
+ root.addEventListener('pointerup',e=>endPointer(e));
+ root.addEventListener('pointercancel',e=>endPointer(e,true));
+}
+window.addEventListener('blur',()=>{if(dragState){if(dragState.timer)clearTimeout(dragState.timer);dragState=null;dragGhost.style.display='none';renderHotbar();renderStorageWindow();}});
+renderHotbar();saveInventory();saveContainers();
 let seatedAt=null;
 let chopJob=null;
 // One action dispatcher for future AI and human interactions.
