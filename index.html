@@ -14,19 +14,26 @@
 #buttons{position:absolute;bottom:max(33px,env(safe-area-inset-bottom));right:18px;display:flex;flex-direction:column;gap:10px}button{background:#244f48c9;border:1px solid #ffffff99;border-radius:13px;padding:13px 16px;color:white;font:600 13px system-ui;touch-action:manipulation}button:active{background:#538f79}
 #status{position:absolute;inset:0;background:linear-gradient(#94c4d9,#b5d4a3);display:grid;place-items:center;text-align:center;padding:20px;color:#164336;font-size:16px;font-weight:700}
 #reticle{position:absolute;top:50%;left:50%;height:4px;width:4px;background:#fffc;border-radius:50%;pointer-events:none}
-#interaction{position:absolute;bottom:max(183px,calc(env(safe-area-inset-bottom) + 165px));left:50%;transform:translateX(-50%);width:min(350px,calc(100% - 30px));background:#143d36ed;border:1px solid #ffffff66;border-radius:15px;padding:12px;box-shadow:0 7px 30px #0005;display:none;z-index:2}
+#interaction{position:absolute;bottom:max(225px,calc(env(safe-area-inset-bottom) + 211px));left:50%;transform:translateX(-50%);width:min(350px,calc(100% - 30px));background:#143d36ed;border:1px solid #ffffff66;border-radius:15px;padding:12px;box-shadow:0 7px 30px #0005;display:none;z-index:2}
 #interaction strong{font-size:14px}#interaction p{margin:3px 0 9px;font-size:11px;color:#deeadf}#interactionActions{display:flex;flex-wrap:wrap;gap:7px}
 #interactionActions button{padding:10px 12px;font-size:12px;background:#426a49e6}
 #interactionActions button:disabled{opacity:.45}
 #toast{position:absolute;left:50%;top:22%;transform:translateX(-50%);background:#123c34e8;border:1px solid #ffffff70;border-radius:12px;padding:10px 15px;max-width:85%;text-align:center;font-size:13px;display:none;pointer-events:none;z-index:3}
+#hotbar{position:absolute;left:50%;transform:translateX(-50%);bottom:max(10px,env(safe-area-inset-bottom));display:flex;gap:4px;z-index:5;background:#202720b8;border:2px solid #c2bbb190;border-radius:8px;padding:5px;touch-action:manipulation}
+.hotbar-slot{position:relative;width:clamp(39px,10.6vw,54px);height:clamp(42px,11vw,55px);background:#44483fdd;border:2px solid #817f6d;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fefaf1;font-size:23px;padding:0}
+.hotbar-slot.selected{border-color:#fffce6;box-shadow:inset 0 0 0 2px #d5aa67,0 0 8px #fff5}
+.hotbar-slot .num{position:absolute;top:1px;left:4px;font-size:10px;line-height:1}
+.hotbar-slot .qty{position:absolute;right:3px;bottom:1px;font-size:12px;font-weight:800;text-shadow:0 1px 2px #111}
+#pad{bottom:max(100px,calc(env(safe-area-inset-bottom) + 80px))}
+#buttons{bottom:max(104px,calc(env(safe-area-inset-bottom) + 84px))}
 @media(max-width:370px){#guide{display:none}#pad{width:112px;height:112px}#knob{width:42px;height:42px}}
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:10px">v0.8</small></h1><p>A home in the forest · interactive camp</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:10px">v0.9</small></h1><p>A home in the forest · expanded interactions</p></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
 <div id="pad" aria-label="Movement joystick"><div id="knob"></div></div>
-<div id="buttons"><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button></div>
+<div id="buttons"><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button></div><div id="hotbar" aria-label="Five inventory slots"></div>
 <section id="interaction" aria-live="polite"><strong id="interactionName"></strong><p id="interactionInfo"></p><div id="interactionActions"></div></section><div id="toast" role="status"></div>
 <div id="status">Growing the woodland...</div><div id="diag" style="position:absolute;top:76px;left:16px;border-radius:8px;background:#123a37c9;color:#fff;font:11px monospace;padding:7px;pointer-events:none">Starting renderer...</div>
 <script>
@@ -124,6 +131,27 @@ for(let i=0;i<8;i++){let z=13+i*2.4,x=Math.sin(i*.9)*.65;box(x,.02,z,2.3,.08,1.4
 box(-19,.03,12,.35,3.8,.35,wood);
 box(-19,2.8,12,3,.85,.24,woodLight);solidBox(-19,12,.35,.35);
 
+
+// Shower shelter, deliberately open at its front. Its handle is an interactable fixture.
+const showerWood=[.47,.34,.23], showerWall=[.63,.63,.55];
+box(18,.03,9,5,.22,5,showerWood);
+for(const px of [15.7,20.3])for(const pz of [6.7,11.3])box(px,.22,pz,.23,4.65,.23,showerWood);
+box(18,4.6,9,5.1,.24,5.1,showerWood);
+box(18,.22,6.7,5,.0+3.8,.2,showerWall);
+box(15.7,.22,9,.18,3.8,4.5,showerWall);
+box(20.3,.22,9,.18,3.8,4.5,showerWall);
+box(18,4.12,9,1.8,.22,1.8,[.39,.41,.43]);
+box(18,3.1,9,.12,1.1,.12,[.71,.73,.72]);
+box(18,.95,11.18,.45,.45,.15,[.49,.54,.56]);
+solidBox(18,6.7,4.9,.2,3.8);solidBox(15.7,9,.2,4.5,3.8);solidBox(20.3,9,.2,4.5,3.8);
+box(18,.03,9,4.5,.1,4.4,[.42,.44,.39]);
+// Chopping station: the axe is fixed visually in its log and remains after every pickup.
+box(2,.02,15,2.8,.8,2.0,wood);
+solidBox(2,15,2.8,2,.8);
+box(2,1.0,15,.22,2.3,.22,[.55,.34,.19]);
+box(2.45,2.65,15,.95,.72,.20,[.68,.72,.74]);
+box(2.85,2.65,15,.20,.73,.22,[.45,.48,.51]);
+
 // Bring the original oversized campsite into a more believable human scale.
 const campHorizontalScale=.70,campVerticalScale=.55;
 for(let i=campStartVertex;i<positions.length/3;i++){
@@ -148,6 +176,13 @@ for(let i=0;i<58;i++){
   const a=rnd(113+i*13)*Math.PI*2,r=9+rnd(i*11+8)*15,x=Math.cos(a)*r,z=Math.sin(a)*r,y=ground(x,z);
   box(x,y+.025,z,.08,.07,.55+rnd(i*23)*.8,[.36,.24,.13]);
 }
+// Toggleable shower droplets are added separately so the faucet can switch off.
+const showerWaterStart=positions.length/3;
+for(let i=0;i<9;i++){
+ const x=12.6+(rnd(701+i)-.5)*.8,z=6.3+(rnd(904+i)-.5)*.75;
+ box(x,1.0+rnd(331+i)*.65,z,.035,.65,.035,[.36,.73,.91]);
+}
+const showerWaterEnd=positions.length/3;
 // Large rocks are genuine obstacles; tiny stones and sticks above are not.
 for(let i=0;i<14;i++){
   const a=(i+.35*rnd(i+17))*Math.PI*2/14,r=19+rnd(i+34)*5;
@@ -163,7 +198,7 @@ function perspective(fov,aspect,near,far){let f=1/Math.tan(fov/2),nf=1/(near-far
 function view(eye,yaw,pitch){let cp=Math.cos(pitch),z=[-Math.sin(yaw)*cp,-Math.sin(pitch),Math.cos(yaw)*cp],x=[z[2],0,-z[0]],l=Math.hypot(...x);x=x.map(q=>q/l);let y=[z[1]*x[2]-z[2]*x[1],z[2]*x[0]-z[0]*x[2],z[0]*x[1]-z[1]*x[0]];return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-x.reduce((s,q,i)=>s+q*eye[i],0),-y.reduce((s,q,i)=>s+q*eye[i],0),-z.reduce((s,q,i)=>s+q*eye[i],0),1]);}
 // World-object actions do not alter an actor's needs, health, hunger, or energy.
 // Future AI agents can call performAction(objectId, actionId) without a separate interaction implementation.
-const initialWorld={fireLit:true, tentSleeping:false, storedFood:0, looseFood:3};
+const initialWorld={fireLit:true, tentSleeping:false, showerOn:false, storedFood:0, looseFood:3};
 let world={...initialWorld};
 try{const saved=JSON.parse(localStorage.getItem('woodland-camp-objects-v1')||'null');
   if(saved&&typeof saved==='object'){
@@ -173,10 +208,69 @@ try{const saved=JSON.parse(localStorage.getItem('woodland-camp-objects-v1')||'nu
   }
 }catch(e){}
 function saveWorld(){try{localStorage.setItem('woodland-camp-objects-v1',JSON.stringify(world));}catch(e){}}
+// Each browser visitor has an independent five-slot local inventory.
+// Axes are stackable, so the stationary axe can be claimed indefinitely.
+const inventoryKey='woodland-camp-hotbar-v1';
+let inventory=[{id:'food',qty:Math.max(0,world.looseFood)},null,null,null,null];
+try{
+ const saved=JSON.parse(localStorage.getItem(inventoryKey)||'null');
+ if(Array.isArray(saved)&&saved.length===5){
+   inventory=saved.map(item=>item&&['food','axe'].includes(item.id)&&Number.isSafeInteger(item.qty)&&item.qty>0?{id:item.id,qty:item.qty}:null);
+ }
+}catch(e){}
+let selectedSlot=0;
+function saveInventory(){try{localStorage.setItem(inventoryKey,JSON.stringify(inventory));}catch(e){}}
+function itemQuantity(id){return inventory.reduce((n,slot)=>n+(slot&&slot.id===id?slot.qty:0),0);}
+function addItem(id,quantity=1){
+ if(!['axe','food'].includes(id)||quantity<1)return false;
+ let index=inventory.findIndex(s=>s&&s.id===id&&s.qty<=Number.MAX_SAFE_INTEGER-quantity);
+ if(index<0)index=inventory.findIndex(s=>s===null);
+ if(index<0)return false;
+ if(inventory[index])inventory[index].qty+=quantity;else inventory[index]={id,qty:quantity};
+ world.looseFood=itemQuantity('food');
+ saveInventory();saveWorld();renderHotbar();return true;
+}
+function removeItem(id,quantity=1){
+ if(itemQuantity(id)<quantity)return false;
+ let remaining=quantity;
+ for(let i=0;i<5&&remaining>0;i++){
+  if(inventory[i]?.id!==id)continue;
+  const n=Math.min(inventory[i].qty,remaining);inventory[i].qty-=n;remaining-=n;
+  if(inventory[i].qty===0)inventory[i]=null;
+ }
+ world.looseFood=itemQuantity('food');
+ saveInventory();saveWorld();renderHotbar();return true;
+}
+const hotbar=document.getElementById('hotbar');
+function renderHotbar(){
+ hotbar.replaceChildren();
+ inventory.forEach((slot,i)=>{
+  const btn=document.createElement('button');btn.className='hotbar-slot'+(i===selectedSlot?' selected':'');
+  btn.type='button';btn.setAttribute('aria-label','Slot '+(i+1)+': '+(slot?slot.qty+' '+slot.id:'empty'));
+  const num=document.createElement('span');num.className='num';num.textContent=String(i+1);btn.appendChild(num);
+  if(slot){
+   const icon=document.createElement('span');icon.textContent=slot.id==='axe'?'🪓':'🍎';btn.appendChild(icon);
+   const count=document.createElement('span');count.className='qty';count.textContent=String(slot.qty);btn.appendChild(count);
+  }
+  btn.addEventListener('click',()=>{selectedSlot=i;renderHotbar();});hotbar.appendChild(btn);
+ });
+}
+renderHotbar();
+world.looseFood=itemQuantity('food');
+saveWorld();
+let seatedAt=null;
+// One action dispatcher for future AI and human interactions.
+
 const usable=[
  {id:'tent',name:'Canvas tent',x:-6.3,z:-4.9,w:5.18,d:5.18,reach:2.3},
  {id:'fire',name:'Campfire',x:.7,z:-2.8,w:3.2,d:3.2,reach:2.15},
- {id:'storage',name:'Food storage',x:-8.3,z:4.45,w:3.65,d:3.6,reach:2.35}
+ {id:'storage',name:'Food storage',x:-8.3,z:4.45,w:3.65,d:3.6,reach:2.35},
+ {id:'shower',name:'Shower block',x:12.6,z:6.3,w:3.5,d:3.5,reach:2.5},
+ {id:'axe',name:'Chopping log and axe',x:1.4,z:10.5,w:1.96,d:1.4,reach:2.2},
+ {id:'seat1',name:'Campfire log seat',x:-.7,z:1.4,w:3.22,d:.6,reach:1.7},
+ {id:'seat2',name:'Woodland log seat',x:3.5,z:1.19,w:2.8,d:.6,reach:1.7},
+ {id:'bench1',name:'Dining bench',x:7.7,z:-2.38,w:3.92,d:.56,reach:1.5},
+ {id:'bench2',name:'Dining bench',x:7.7,z:-6.02,w:3.92,d:.56,reach:1.5}
 ];
 function distanceToObject(obj,x,z){
  const dx=Math.max(0,Math.abs(x-obj.x)-obj.w/2),dz=Math.max(0,Math.abs(z-obj.z)-obj.d/2);
@@ -185,7 +279,10 @@ function distanceToObject(obj,x,z){
 function availableActions(id){
  if(id==='tent')return [{id:world.tentSleeping?'wake':'sleep',label:world.tentSleeping?'Finish sleeping':'Sleep'}];
  if(id==='fire')return [{id:world.fireLit?'extinguish':'light',label:world.fireLit?'Extinguish fire':'Light fire'}];
- if(id==='storage')return [{id:'store',label:'Store food',disabled:world.looseFood===0},{id:'take',label:'Take food',disabled:world.storedFood===0}];
+ if(id==='storage')return [{id:'store',label:'Store food',disabled:itemQuantity('food')===0},{id:'take',label:'Take food',disabled:world.storedFood===0}];
+ if(id==='shower')return [{id:world.showerOn?'showerOff':'showerOn',label:world.showerOn?'Turn shower off':'Turn shower on'}];
+ if(id==='axe')return [{id:'takeAxe',label:'Take an axe',disabled:!inventory.some(slot=>!slot||slot.id==='axe')}];
+ if(id.startsWith('seat')||id.startsWith('bench'))return [{id:seatedAt===id?'stand':'sit',label:seatedAt===id?'Stand up':'Sit down'}];
  return [];
 }
 function performAction(objectId,actionId){
@@ -199,8 +296,17 @@ function performAction(objectId,actionId){
    world.fireLit=actionId==='light';
    message=world.fireLit?'The campfire is lit.':'The campfire is out.';
  } else if(objectId==='storage'){
-   if(actionId==='store'){world.looseFood--;world.storedFood++;message='One food portion stored.';}
-   else if(actionId==='take'){world.storedFood--;world.looseFood++;message='One food portion taken out.';}
+   if(actionId==='store'){removeItem('food');world.storedFood++;message='One food portion stored.';}
+   else if(actionId==='take'){if(addItem('food')){world.storedFood--;message='One food portion taken out.';}else return {ok:false,message:'Your inventory is full.'};}
+ } else if(objectId==='shower'){
+   world.showerOn=actionId==='showerOn';
+   message=world.showerOn?'Shower turned on.':'Shower turned off.';
+ } else if(objectId==='axe'){
+   if(!addItem('axe'))return {ok:false,message:'Your inventory is full.'};
+   message='Axe added to inventory. The camp axe remains in the log.';
+ } else if(objectId.startsWith('seat')||objectId.startsWith('bench')){
+   seatedAt=actionId==='sit'?objectId:null;
+   message=seatedAt?'You are sitting down.':'You stood up.';
  }
  saveWorld();return {ok:true,message};
 }
@@ -214,8 +320,11 @@ function renderInteraction(){
  const obj=usable.find(o=>o.id===nearby);
  if(!obj){interact.style.display='none';return;}
  interact.style.display='block';iname.textContent=obj.name;
- if(obj.id==='storage')iinfo.textContent='In crate: '+world.storedFood+' food | Camp supplies: '+world.looseFood;
+ if(obj.id==='storage')iinfo.textContent='In crate: '+world.storedFood+' food | Inventory: '+itemQuantity('food')+' food';
  else if(obj.id==='fire')iinfo.textContent=world.fireLit?'Currently burning':'Currently unlit';
+ else if(obj.id==='shower')iinfo.textContent=world.showerOn?'Water is running':'Water is turned off';
+ else if(obj.id==='axe')iinfo.textContent='Reusable supply: the world axe never disappears';
+ else if(obj.id.startsWith('seat')||obj.id.startsWith('bench'))iinfo.textContent=seatedAt===obj.id?'Currently sitting':'Sit here';
  else iinfo.textContent=world.tentSleeping?'Sleeping session active':'Sleeping area ready';
  iactions.replaceChildren();
  for(const action of availableActions(obj.id)){
@@ -227,6 +336,7 @@ function renderInteraction(){
 function updateNearby(){
  let best=null,bestDist=Infinity;
  if(!fly)for(const o of usable){
+  if(seatedAt&&o.id!==seatedAt)continue;
   const d=distanceToObject(o,camera[0],camera[2]);
   if(d<=o.reach&&d<bestDist){bestDist=d;best=o.id;}
  }
@@ -241,8 +351,8 @@ canvas.addEventListener('pointerdown',e=>{drag=[e.pointerId,e.clientX,e.clientY]
 document.getElementById('fly').addEventListener('click',e=>{fly=!fly;e.currentTarget.textContent=fly?'✦ Walking mode':'✦ Fly mode';diag.textContent=fly?'FLY MODE: collisions disabled':'WALK MODE: collisions enabled';updateNearby();});document.getElementById('reset').addEventListener('click',()=>{camera=[0,5,32];yaw=0;pitch=-.25;updateNearby();});
 window.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code.startsWith('Arrow'))e.preventDefault();});window.addEventListener('keyup',e=>keys[e.code]=false);window.addEventListener('blur',()=>{axis=[0,0];keys={};knob.style.transform='translate(0,0)';});
 status.style.display='none';diag.textContent='Ready: '+count+' vertices';
-let frameNumber=0;function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(ground(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=(ground(camera[0],camera[2])+eyeHeight-camera[1])*.14;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,count-fireFlameEnd);if(++frameNumber%12===1)updateNearby();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v0.8 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let frameNumber=0;function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){seatedAt=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(ground(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=seatedAt?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=(ground(camera[0],camera[2])+(seatedAt?1.02:eyeHeight)-camera[1])*.14;}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);if(++frameNumber%12===1)updateNearby();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v0.9 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
