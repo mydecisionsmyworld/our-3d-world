@@ -18,7 +18,7 @@
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:10px">v0.4</small></h1><p>A home in the forest</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:10px">v0.5</small></h1><p>A home in the forest</p></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
 <div id="pad" aria-label="Movement joystick"><div id="knob"></div></div>
 <div id="buttons"><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button></div>
@@ -33,6 +33,22 @@ const frag='precision mediump float;varying vec3 color;varying float fog;void ma
 function shader(type,src){let s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
 let prog;try{prog=gl.createProgram();gl.attachShader(prog,shader(gl.VERTEX_SHADER,vert));gl.attachShader(prog,shader(gl.FRAGMENT_SHADER,frag));gl.linkProgram(prog);if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(prog));}catch(e){status.textContent='Graphics failed: '+e.message;return;}gl.useProgram(prog);
 let positions=[],colors=[],normals=[];
+const obstacles=[],playerRadius=.58;
+function solidBox(x,z,w,d){obstacles.push({kind:'box',x,z,w:w/2,d:d/2});}
+function solidTrunk(x,z,r){obstacles.push({kind:'trunk',x,z,r});}
+function blocked(x,z){
+  if(x < -93||x > 93||z < -93||z > 93)return true;
+  for(const o of obstacles){
+    if(o.kind==='box'){
+      const cx=Math.max(o.x-o.w,Math.min(x,o.x+o.w)),cz=Math.max(o.z-o.d,Math.min(z,o.z+o.d));
+      if((x-cx)*(x-cx)+(z-cz)*(z-cz)<playerRadius*playerRadius)return true;
+    }else{
+      const dx=x-o.x,dz=z-o.z,r=o.r+playerRadius;
+      if(dx*dx+dz*dz<r*r)return true;
+    }
+  }
+  return false;
+}
 function tri(a,b,c,color){const u=[b[0]-a[0],b[1]-a[1],b[2]-a[2]],v=[c[0]-a[0],c[1]-a[1],c[2]-a[2]],n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]],len=Math.hypot(...n)||1;for(const q of [a,b,c]){positions.push(...q);colors.push(...color);normals.push(n[0]/len,n[1]/len,n[2]/len);}}
 function quad(a,b,c,d,k){tri(a,b,c,k);tri(a,c,d,k);}
 function rnd(n){let a=Math.sin(n*127.1+78.2)*43758.5453;return a-Math.floor(a);}
@@ -40,7 +56,7 @@ function ground(x,z){const d=Math.hypot(x,z),lake=Math.hypot(x+55,z+42);let raw=
 const N=64,S=3.2;for(let i=0;i<N;i++)for(let j=0;j<N;j++){let x=(i-N/2)*S,z=(j-N/2)*S,a=[x,ground(x,z),z],b=[x,ground(x,z+S),z+S],c=[x+S,ground(x+S,z+S),z+S],d=[x+S,ground(x+S,z),z],h=(a[1]+b[1]+c[1]+d[1])*.25,r=rnd(i*293+j*37),k=h>22?[.59,.63,.62]:h>12?[.47,.57,.46]:[.31+r*.055,.55+r*.09,.29+r*.04];if(Math.hypot(x+S*.5,z+S*.5)<23)k=[.42+r*.045,.57+r*.05,.32+r*.025];quad(a,b,c,d,k);}
 function cone(x,y,z,r,h,k){for(let i=0;i<7;i++){let t=i*Math.PI*2/7,u=(i+1)*Math.PI*2/7;tri([x+Math.cos(t)*r,y,z+Math.sin(t)*r],[x+Math.cos(u)*r,y,z+Math.sin(u)*r],[x,y+h,z],k);}}
 function trunk(x,y,z,r,h,k){for(let i=0;i<7;i++){let t=i*Math.PI*2/7,u=(i+1)*Math.PI*2/7;quad([x+Math.cos(t)*r,y,z+Math.sin(t)*r],[x+Math.cos(u)*r,y,z+Math.sin(u)*r],[x+Math.cos(u)*r,y+h,z+Math.sin(u)*r],[x+Math.cos(t)*r,y+h,z+Math.sin(t)*r],k);}}
-for(let i=0;i<475;i++){let x=(rnd(i*3+1)-.5)*175,z=(rnd(i*3+2)-.5)*175,h=ground(x,z);if(Math.hypot(x+55,z+42)<23||h>22||Math.hypot(x,z)<25)continue;let s=2+rnd(i*3+9)*3.6;trunk(x,h,z,.15*s,s*.9,[.34,.235,.145]);cone(x,h+s*.35,z,s*.65,s*1.45,[.13+rnd(i)*.09,.34+rnd(i+8)*.12,.20]);cone(x,h+s*.95,z,s*.47,s*1.18,[.16,.42,.23]);}
+for(let i=0;i<475;i++){let x=(rnd(i*3+1)-.5)*175,z=(rnd(i*3+2)-.5)*175,h=ground(x,z);if(Math.hypot(x+55,z+42)<23||h>22||Math.hypot(x,z)<25)continue;let s=2+rnd(i*3+9)*3.6;trunk(x,h,z,.15*s,s*.9,[.34,.235,.145]);solidTrunk(x,z,.15*s);cone(x,h+s*.35,z,s*.65,s*1.45,[.13+rnd(i)*.09,.34+rnd(i+8)*.12,.20]);cone(x,h+s*.95,z,s*.47,s*1.18,[.16,.42,.23]);}
 for(let i=0;i<140;i++){let x=(rnd(i*7+21)-.5)*140,z=(rnd(i*7+27)-.5)*140,h=ground(x,z);if(h>12||Math.hypot(x+55,z+42)<23||Math.hypot(x,z)<23)continue;let s=.35+rnd(i+88)*.9;cone(x,h,z,s,s*.9,[.47,.54,.39]);}
 for(let i=0;i<70;i++){let x=(rnd(i*13+30)-.5)*160,z=(rnd(i*13+31)-.5)*160,h=ground(x,z);if(h>14||Math.hypot(x+55,z+42)<22||Math.hypot(x,z)<23)continue;let s=.4+rnd(i+40)*1.4;cone(x,h,z,s,s*.7,[.46,.47,.43]);}
 for(let i=0;i<64;i++){let a=i*2*Math.PI/64,b=(i+1)*2*Math.PI/64;tri([-55,-1.45,-42],[-55+Math.cos(b)*12.8,-1.45,-42+Math.sin(b)*12.8],[-55+Math.cos(a)*12.8,-1.45,-42+Math.sin(a)*12.8],[.29,.66,.76]);}
@@ -59,7 +75,7 @@ function log(x,y,z,r,len,k){trunk(x,y,z,r,len,k);}
 const y=0;
 // Tent platform, ridge, triangular front and two fabric roof sides.
 box(-9,.02,-7,9,.23,9,wood);
-box(-9,.27,-7,8,.08,8,[.46,.44,.34]);
+box(-9,.27,-7,8,.08,8,[.46,.44,.34]);solidBox(-9,-7,7.4,7.1);
 let tx=-9,tz=-7,tw=3.7,th=4.4,front=tz+3.55,back=tz-3.55;
 tri([tx-tw,.3,front],[tx+tw,.3,front],[tx,th,front],canvasTan);
 tri([tx+tw,.3,back],[tx-tw,.3,back],[tx,th,back],canvasShade);
@@ -71,28 +87,28 @@ box(tx,.3,front+0.1,1.3,.08,.2,[.60,.46,.28]);
 box(-9,.34,-6.8,2.5,.13,3.8,[.26,.39,.33]);
 box(-9,.48,-7.35,2.4,.07,1.8,[.64,.34,.24]);
 // Campfire with a stone ring and crossed timber.
-for(let i=0;i<11;i++){let a=i*Math.PI*2/11;box(1+Math.cos(a)*2,.02,-4+Math.sin(a)*2,.85,.55,.72,[.43+.03*rnd(i),.43,.40]);}
+for(let i=0;i<11;i++){let a=i*Math.PI*2/11;box(1+Math.cos(a)*2,.02,-4+Math.sin(a)*2,.85,.55,.72,[.43+.03*rnd(i),.43,.40]);}solidTrunk(1,-4,2.15);
 box(1,.09,-4,3.4,.32,.52,wood);
 box(1,.15,-4,.55,.35,3.2,woodLight);
 cone(1,.48,-4,1.05,2.4,[.95,.40,.07]);cone(1,.58,-4,.58,1.6,[1,.72,.18]);
 // Dining table, four sturdy legs, and benches.
 for(let dx of [-2.1,2.1])for(let dz of [-1.1,1.1])box(11+dx,.01,-6+dz,.44,1.8,.44,wood);
-box(11,1.8,-6,5.5,.27,3.5,woodLight);
-for(let dz of [-2.6,2.6]){box(11,.85,-6+dz,5.6,.24,.8,wood);for(let dx of [-2,2])box(11+dx,.01,-6+dz,.35,.9,.35,wood);}
+box(11,1.8,-6,5.5,.27,3.5,woodLight);solidBox(11,-6,5.5,3.5);
+for(let dz of [-2.6,2.6]){box(11,.85,-6+dz,5.6,.24,.8,wood);solidBox(11,-6+dz,5.6,.8);for(let dx of [-2,2])box(11+dx,.01,-6+dz,.35,.9,.35,wood);}
 box(11,2.09,-6,1.1,.18,.8,[.66,.66,.57]);
 box(10,2.09,-5.5,.65,.34,.65,[.27,.37,.32]);
 // Stash / supply corner: crates, barrel and stacked firewood.
-for(const [x,z,w,h,d] of [[-12,6,2.4,2.1,2.3],[-9.45,6,2.2,1.6,2],[-11.5,8.3,2.1,1.1,1.9]]){box(x,.05,z,w,h,d,wood);box(x,h+.07,z,w+.07,.17,d+.07,woodLight);
+for(const [x,z,w,h,d] of [[-12,6,2.4,2.1,2.3],[-9.45,6,2.2,1.6,2],[-11.5,8.3,2.1,1.1,1.9]]){box(x,.05,z,w,h,d,wood);box(x,h+.07,z,w+.07,.17,d+.07,woodLight);solidBox(x,z,w+.07,d+.07);
 for(const offset of [-.65,.65])box(x+offset,.1,z+d/2+.045,.12,h,.1,[.30,.21,.12]);}
-box(-6,.03,7,1.9,2.3,1.9,[.38,.30,.21]);box(-6,2.3,7,2.05,.16,2.05,[.55,.43,.28]);
-for(let i=0;i<8;i++){let xx=4+(i%4)*1.1,zz=8+Math.floor(i/4)*1.0;box(xx,.1,zz,.85,.75,1.4,woodLight);}
+box(-6,.03,7,1.9,2.3,1.9,[.38,.30,.21]);box(-6,2.3,7,2.05,.16,2.05,[.55,.43,.28]);solidBox(-6,7,2.05,2.05);
+for(let i=0;i<8;i++){let xx=4+(i%4)*1.1,zz=8+Math.floor(i/4)*1.0;box(xx,.1,zz,.85,.75,1.4,woodLight);solidBox(xx,zz,.85,1.4);}
 // Two log seats and small approach stepping stones.
-box(-1,.07,2,4.6,.9,.85,wood);
-box(5,.07,1.7,4.0,.9,.85,wood);
+box(-1,.07,2,4.6,.9,.85,wood);solidBox(-1,2,4.6,.85);
+box(5,.07,1.7,4.0,.9,.85,wood);solidBox(5,1.7,4.0,.85);
 for(let i=0;i<8;i++){let z=13+i*2.4,x=Math.sin(i*.9)*.65;box(x,.02,z,2.3,.08,1.4,[.55,.51,.39]);}
 // Decorative signpost marking the camp.
 box(-19,.03,12,.35,3.8,.35,wood);
-box(-19,2.8,12,3,.85,.24,woodLight);
+box(-19,2.8,12,3,.85,.24,woodLight);solidBox(-19,12,.35,.35);
 
 let count=positions.length/3,buf=new Float32Array(count*9);for(let i=0;i<count;i++)for(let j=0;j<3;j++){buf[i*9+j]=positions[i*3+j];buf[i*9+j+3]=colors[i*3+j];buf[i*9+j+6]=normals[i*3+j];}
 let buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,buf,gl.STATIC_DRAW);for(const [name,offset] of [['p',0],['c',3],['n',6]]){let loc=gl.getAttribLocation(prog,name);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,3,gl.FLOAT,false,36,offset*4);}
@@ -109,8 +125,8 @@ canvas.addEventListener('pointerdown',e=>{drag=[e.pointerId,e.clientX,e.clientY]
 document.getElementById('fly').addEventListener('click',e=>{fly=!fly;e.currentTarget.textContent=fly?'✦ Walking mode':'✦ Fly mode';});document.getElementById('reset').addEventListener('click',()=>{camera=[0,8,32];yaw=0;pitch=-.26;});
 window.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code.startsWith('Arrow'))e.preventDefault();});window.addEventListener('keyup',e=>keys[e.code]=false);window.addEventListener('blur',()=>{axis=[0,0];keys={};knob.style.transform='translate(0,0)';});
 status.style.display='none';diag.textContent='Ready: '+count+' vertices';
-let frameNumber=0;function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}let speed=(fly?24:13)*dt;camera[0]+=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed;camera[2]+=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;camera[0]=Math.max(-93,Math.min(93,camera[0]));camera[2]=Math.max(-93,Math.min(93,camera[2]));if(fly){camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(ground(camera[0],camera[2])+2.5,camera[1]);}else camera[1]+=(ground(camera[0],camera[2])+3.1-camera[1])*.14;
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,count);if(++frameNumber%60===1){let err=gl.getError();diag.textContent='Frame '+frameNumber+' | Triangles '+Math.floor(count/3)+' | GL '+err+' | '+canvas.width+'x'+canvas.height;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let frameNumber=0;function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}let speed=(fly?24:13)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(ground(camera[0],camera[2])+2.5,camera[1]);}else {const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=(ground(camera[0],camera[2])+3.1-camera[1])*.14;}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,count);if(++frameNumber%60===1){let err=gl.getError();diag.textContent='Frame '+frameNumber+' | Colliders '+obstacles.length+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
