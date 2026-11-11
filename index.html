@@ -699,6 +699,188 @@ function updateNearby(){
  }
  if(nearby!==best){nearby=best;renderInteraction();}
 }
+
+// Message-board transport. Configure a deployed Worker URL to enable shared messages.
+// Blank means local preview only; its posts cannot be read on another device.
+const BOARD_API_URL='';
+const boardLocalKey='woodland-camp-board-preview-v1';
+const boardIdentityKey='woodland-board-visitor-v1';
+const boardName=document.getElementById('boardName');
+const boardCompose=document.getElementById('boardCompose');
+const boardStatus=document.getElementById('boardStatus');
+const boardMessages=document.getElementById('boardMessages');
+const boardOverlay=document.getElementById('boardOverlay');
+const boardMode=document.getElementById('boardMode');
+const boardCounter=document.getElementById('boardComposeCounter');
+const sharedBoard=BOARD_API_URL.trim().length>0;
+let boardIsOpen=false,boardBusy=false,boardOwnerKey='',boardPosts=[],boardIdentity=null;
+const boardVisitorKey='woodland-board-preview-id';
+function getPreviewIdentity(){
+ try{
+  let id=localStorage.getItem(boardVisitorKey);
+  if(!id){id=crypto.randomUUID();localStorage.setItem(boardVisitorKey,id);}
+  return id;
+ }catch(e){return 'local-visitor';}
+}
+let previewVisitorId=getPreviewIdentity();
+function wordCount(str){return (str.trim().match(/\S+/g)||[]).length;}
+function textNode(tag,text,cls){
+ const e=document.createElement(tag);e.textContent=String(text);if(cls)e.className=cls;return e;
+}
+function setBoardStatus(message){boardStatus.textContent=message;}
+function boardSavedName(){
+ const n=boardName.value.trim().slice(0,40);
+ try{localStorage.setItem('woodland-board-display-name',n);}catch(e){}
+ return n||'Visitor';
+}
+try{boardName.value=localStorage.getItem('woodland-board-display-name')||'';}catch(e){}
+function loadLocalBoard(){
+ try{
+  const v=JSON.parse(localStorage.getItem(boardLocalKey)||'[]');
+  return Array.isArray(v)?v.filter(m=>m&&typeof m.id==='string'&&typeof m.text==='string').slice(0,30):[];
+ }catch(e){return [];}
+}
+function storeLocalBoard(){
+ try{localStorage.setItem(boardLocalKey,JSON.stringify(boardPosts));}catch(e){}
+}
+function apiHeaders(){
+ const h={'Content-Type':'application/json'};
+ if(boardIdentity?.token)h.Authorization='Bearer '+boardIdentity.token;
+ if(boardOwnerKey)h['X-Owner-Key']=boardOwnerKey;
+ return h;
+}
+async function boardApi(path,method='GET',body){
+ const response=await fetch(BOARD_API_URL.replace(/\/$/,'')+path,{
+  method,headers:apiHeaders(),body:body===undefined?undefined:JSON.stringify(body)
+ });
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error(data.error||'Board request failed ('+response.status+')');
+ return data;
+}
+async function ensureBoardIdentity(){
+ if(!sharedBoard)return;
+ if(boardIdentity?.token)return;
+ try{const cached=JSON.parse(localStorage.getItem(boardIdentityKey)||'null');
+  if(cached&&typeof cached.token==='string'&&cached.token.length>20)boardIdentity=cached;
+ }catch(e){}
+ if(boardIdentity)return;
+ const session=await boardApi('/api/session','POST');
+ boardIdentity={token:session.token,id:session.id};
+ try{localStorage.setItem(boardIdentityKey,JSON.stringify(boardIdentity));}catch(e){}
+}
+async function refreshBoard(){
+ if(!boardIsOpen)return;
+ if(!sharedBoard){boardPosts=loadLocalBoard();renderBoardMessages();return;}
+ try{
+  await ensureBoardIdentity();
+  const data=await boardApi('/api/messages');
+  boardPosts=Array.isArray(data.messages)?data.messages:[];
+  setBoardStatus('');
+  renderBoardMessages();
+ }catch(e){setBoardStatus('Cannot reach shared board: '+e.message);}
+}
+function sortBoard(){
+ boardPosts.sort((a,b)=>Number(!!b.pinned)-Number(!!a.pinned)||b.createdAt-a.createdAt);
+}
+async function withBoardAction(action){
+ if(boardBusy)return;
+ boardBusy=true;
+ try{await action();if(sharedBoard)await refreshBoard();else{storeLocalBoard();renderBoardMessages();}}
+ catch(e){setBoardStatus(e.message||String(e));}
+ finally{boardBusy=false;}
+}
+function makePreviewPost(text){
+ return {id:crypto.randomUUID(),authorId:previewVisitorId,name:boardSavedName(),text,
+  createdAt:Date.now(),pinned:false,likes:[],comments:[]};
+}
+function localIsOwner(message){return message.authorId===previewVisitorId;}
+function canModerate(){return boardOwnerKey.length>0;}
+function canDeleteMessage(message){
+ return !sharedBoard?localIsOwner(message):message.own===true||message.canDelete===true;
+}
+function canPinMessage(){return !sharedBoard||boardOwnerKey.length>0;}
+function visiblePostCount(){return boardPosts.length;}
+function renderBoardMessages(){
+ boardMessages.replaceChildren();
+ document.getElementById('boardCount').textContent=visiblePostCount()+' / 30';
+ sortBoard();
+ if(!boardPosts.length){boardMessages.appendChild(textNode('p','No messages yet. Be the first to leave one!','board-note'));return;}
+ for(const msg of boardPosts){
+  const article=document.createElement('article');article.className='board-message';
+  const header=document.createElement('div');header.className='board-head';
+  const name=textNode('strong',(msg.pinned?'📌 ':'')+(msg.name||'Visitor'));
+  const timestamp=textNode('small',new Date(msg.createdAt).toLocaleString());header.append(name,timestamp);
+  article.appendChild(header);
+  article.appendChild(textNode('p',msg.text));
+  const actions=document.createElement('div');actions.className='board-actions';
+  function actionButton(label,onClick){const b=document.createElement('button');b.type='button';b.textContent=label;b.addEventListener('click',onClick);actions.appendChild(b);}
+  const liked=sharedBoard?!!msg.liked:msg.likes.includes(previewVisitorId);
+  actionButton((liked?'♥':'♡')+' '+(sharedBoard?msg.likeCount:msg.likes.length),()=>withBoardAction(async()=>{
+    if(sharedBoard)await boardApi('/api/messages/'+encodeURIComponent(msg.id)+'/like','POST');
+    else {
+     if(liked)msg.likes=msg.likes.filter(id=>id!==previewVisitorId);
+     else msg.likes.push(previewVisitorId);
+    }
+  }));
+  if(canPinMessage())actionButton(msg.pinned?'Unpin':'Pin',()=>withBoardAction(async()=>{
+    if(!msg.pinned&&boardPosts.filter(m=>m.pinned).length>=3)throw Error('Only three messages can be pinned.');
+    if(sharedBoard)await boardApi('/api/messages/'+encodeURIComponent(msg.id)+'/pin','PATCH',{pinned:!msg.pinned});
+    else msg.pinned=!msg.pinned;
+  }));
+  if(canDeleteMessage(msg))actionButton('Delete',()=>withBoardAction(async()=>{
+    if(!window.confirm('Delete this message and its comments?'))return;
+    if(sharedBoard)await boardApi('/api/messages/'+encodeURIComponent(msg.id),'DELETE');
+    else boardPosts=boardPosts.filter(m=>m.id!==msg.id);
+  }));
+  article.appendChild(actions);
+  const comments=document.createElement('div');comments.className='board-comments';
+  const clist=Array.isArray(msg.comments)?msg.comments:[];
+  comments.appendChild(textNode('small','Comments ('+(sharedBoard?(msg.commentCount||clist.length):clist.length)+')'));
+  for(const c of clist)comments.appendChild(textNode('p',(c.name||'Visitor')+': '+c.text));
+  const input=document.createElement('input');input.placeholder='Write a comment…';input.maxLength=1800;
+  const send=document.createElement('button');send.type='button';send.textContent='Comment';
+  send.addEventListener('click',()=>withBoardAction(async()=>{
+    const text=input.value.trim();
+    if(!text||wordCount(text)>300)throw Error('Comments must contain 1–300 words.');
+    if(sharedBoard)await boardApi('/api/messages/'+encodeURIComponent(msg.id)+'/comments','POST',{name:boardSavedName(),text});
+    else msg.comments.push({id:crypto.randomUUID(),name:boardSavedName(),text,createdAt:Date.now()});
+  }));
+  comments.append(input,send);article.appendChild(comments);boardMessages.appendChild(article);
+ }
+}
+function openBoard(){
+ if(storageOpen)closeStorage();
+ boardIsOpen=true;boardOverlay.style.display='flex';
+ boardMode.textContent=sharedBoard?'Shared board: posts are visible to everyone.':'LOCAL PREVIEW ONLY: these messages are NOT shared across devices. A backend must be deployed and connected.';
+ setBoardStatus('');refreshBoard();
+}
+function closeBoard(){boardIsOpen=false;boardOverlay.style.display='none';}
+document.getElementById('boardClose').addEventListener('click',closeBoard);
+boardOverlay.addEventListener('pointerdown',e=>{if(e.target===boardOverlay)closeBoard();});
+document.getElementById('boardRefresh').addEventListener('click',refreshBoard);
+boardCompose.addEventListener('input',()=>{
+ const count=wordCount(boardCompose.value);boardCounter.textContent=count+' / 300 words';
+ boardCounter.style.color=count>300?'#ffad92':'#bfcfbd';
+});
+document.getElementById('boardPost').addEventListener('click',()=>withBoardAction(async()=>{
+ const text=boardCompose.value.trim();
+ if(!text||wordCount(text)>300)throw Error('Write 1–300 words before posting.');
+ if(sharedBoard)await boardApi('/api/messages','POST',{name:boardSavedName(),text});
+ else{
+  boardPosts.unshift(makePreviewPost(text));
+  boardPosts.sort((a,b)=>a.createdAt-b.createdAt);
+  while(boardPosts.length>30)boardPosts.shift();
+ }
+ boardCompose.value='';boardCompose.dispatchEvent(new Event('input'));
+ setBoardStatus('Message posted.');
+}));
+document.getElementById('boardOwnerSave').addEventListener('click',()=>{
+ boardOwnerKey=document.getElementById('boardOwnerKey').value.trim();
+ document.getElementById('boardOwnerKey').value='';
+ setBoardStatus(sharedBoard?'Owner key set for this page. Server will verify it on privileged actions.':'Owner key has no special effect in local preview.');
+ renderBoardMessages();
+});
+
 let camera=[0,eyeHeight,14],yaw=0,pitch=-.13,fly=false,axis=[0,0],drag=null,keys={},last=performance.now();
 const pad=document.getElementById('pad'),knob=document.getElementById('knob');let padPointer=null;
 function movePad(e){let r=pad.getBoundingClientRect(),dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2),max=r.width*.34,len=Math.hypot(dx,dy);if(len>max){dx*=max/len;dy*=max/len;}axis=[dx/max,-dy/max];knob.style.transform='translate('+dx+'px,'+dy+'px)';}
