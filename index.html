@@ -66,7 +66,7 @@
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:10px">v1.6</small></h1><p>A home in the forest · woodland trails & lake</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:10px">v1.7</small></h1><p>A home in the forest · spacious campsite layout</p></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
 <div id="pad" aria-label="Movement joystick"><div id="knob"></div></div>
 <div id="buttons"><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button></div><div id="hotbar" aria-label="Five inventory slots"></div><div id="dragGhost" aria-hidden="true"></div>
@@ -214,6 +214,20 @@ for(let i=0;i<64;i++){let a=i*2*Math.PI/64,b=(i+1)*2*Math.PI/64;tri([-55,-1.45,-
 
 // Base-camp geometry, arranged as independent props for later interaction logic.
 const campStartVertex=positions.length/3,campStartObstacle=obstacles.length;
+// Each prop is tracked separately so its rendered mesh, collision geometry,
+// and interaction position can move together as one coherent camp layout.
+const campGroups={},campGroupRanges={},campLayoutShifts={
+ tent:[-4.7,-3.6],fire:[-.7,2.8],dining:[1.3,-1.8],
+ supplies:[-1.2,-2.05],barrel:[-7.8,-1.9],
+ seat1:[-2.1,-1],seat2:[-2.2,2.31],
+ board:[-.41,4.32],sign:[16.3,4.1],
+ shower:[-1.6,2],axe:[4.6,-12.5],rack:[-.615,1.95]
+};
+function beginCampGroup(id){campGroups[id]={v:positions.length/3,o:obstacles.length};}
+function endCampGroup(id){
+ const start=campGroups[id];if(!start)throw Error('Missing start for '+id);
+ campGroupRanges[id]={startV:start.v,endV:positions.length/3,startO:start.o,endO:obstacles.length};
+}
 const wood=[.42,.27,.15],woodLight=[.59,.39,.21],canvasTan=[.72,.66,.46],canvasShade=[.54,.49,.33],stone=[.45,.46,.44];
 function box(x,y,z,w,h,d,k){let x0=x-w/2,x1=x+w/2,y0=y,y1=y+h,z0=z-d/2,z1=z+d/2;
 quad([x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0],k);
@@ -225,6 +239,7 @@ quad([x0,y0,z1],[x1,y0,z1],[x1,y0,z0],[x0,y0,z0],k);
 }
 function log(x,y,z,r,len,k){trunk(x,y,z,r,len,k);}
 const y=0;
+beginCampGroup('tent');
 // Tent platform, ridge, triangular front and two fabric roof sides.
 box(-9,.02,-7,9,.23,9,wood);
 box(-9,.27,-7,8,.08,8,[.46,.44,.34]);solidBox(-9,-7,7.4,7.1);
@@ -238,6 +253,7 @@ box(tx,.3,front+0.1,1.3,.08,.2,[.60,.46,.28]);
 // Sleeping mat and blanket inside tent, visible from the entrance.
 box(-9,.34,-6.8,2.5,.13,3.8,[.26,.39,.33]);
 box(-9,.48,-7.35,2.4,.07,1.8,[.64,.34,.24]);
+endCampGroup('tent');beginCampGroup('fire');
 // Campfire with a stone ring and crossed timber.
 for(let i=0;i<11;i++){let a=i*Math.PI*2/11;box(1+Math.cos(a)*2,.02,-4+Math.sin(a)*2,.85,.55,.72,[.43+.03*rnd(i),.43,.40]);}solidTrunk(1,-4,2.15);
 box(1,.09,-4,3.4,.32,.52,wood);
@@ -245,21 +261,28 @@ box(1,.15,-4,.55,.35,3.2,woodLight);
 const fireFlameStart=positions.length/3;
 cone(1,.48,-4,1.05,2.4,[.95,.40,.07]);cone(1,.58,-4,.58,1.6,[1,.72,.18]);
 const fireFlameEnd=positions.length/3;
+endCampGroup('fire');beginCampGroup('dining');
 // Dining table, four sturdy legs, and benches.
 for(let dx of [-2.1,2.1])for(let dz of [-1.1,1.1])box(11+dx,.01,-6+dz,.44,1.8,.44,wood);
 box(11,1.8,-6,5.5,.27,3.5,woodLight);solidBox(11,-6,5.5,3.5);
 for(let dz of [-2.6,2.6]){box(11,.85,-6+dz,5.6,.24,.8,wood);solidBox(11,-6+dz,5.6,.8);for(let dx of [-2,2])box(11+dx,.01,-6+dz,.35,.9,.35,wood);}
 box(11,2.09,-6,1.1,.18,.8,[.66,.66,.57]);
 box(10,2.09,-5.5,.65,.34,.65,[.27,.37,.32]);
-// Stash / supply corner: crates, barrel and stacked firewood.
+endCampGroup('dining');beginCampGroup('supplies');
+// Supply crates grouped away from the central fire circle.
 for(const [x,z,w,h,d] of [[-12,6,2.4,2.1,2.3],[-9.45,6,2.2,1.6,2],[-11.5,8.3,2.1,1.1,1.9]]){box(x,.05,z,w,h,d,wood);box(x,h+.07,z,w+.07,.17,d+.07,woodLight);solidBox(x,z,w+.07,d+.07);
 for(const offset of [-.65,.65])box(x+offset,.1,z+d/2+.045,.12,h,.1,[.30,.21,.12]);}
+endCampGroup('supplies');beginCampGroup('barrel');
 box(-6,.03,7,1.9,2.3,1.9,[.38,.30,.21]);box(-6,2.3,7,2.05,.16,2.05,[.55,.43,.28]);solidBox(-6,7,2.05,2.05);
-for(let i=0;i<8;i++){let xx=4+(i%4)*1.1,zz=8+Math.floor(i/4)*1.0;box(xx,.1,zz,.85,.75,1.4,woodLight);solidBox(xx,zz,.85,1.4);}
-// Two log seats and small approach stepping stones.
+// Removed redundant loose wood piles: the dedicated rack handles firewood storage.
+endCampGroup('barrel');beginCampGroup('seat1');
+// Log seats now ring the central fire at a comfortable distance.
 box(-1,.07,2,4.6,.9,.85,wood);solidBox(-1,2,4.6,.85);
+endCampGroup('seat1');beginCampGroup('seat2');
 box(5,.07,1.7,4.0,.9,.85,wood);solidBox(5,1.7,4.0,.85);
-for(let i=0;i<8;i++){let z=13+i*2.4,x=Math.sin(i*.9)*.65;box(x,.02,z,2.3,.08,1.4,[.55,.51,.39]);}
+endCampGroup('seat2');
+// Entrance stepping-stone clutter removed; proper forest trails now lead onward.
+beginCampGroup('board');
 // Public woodland message board by the clearing entrance.
 box(-3.7,.01,10.2,4.3,.35,1.6,wood);
 for(const x of [-5.25,-2.15])box(x,.22,10.25,.33,3.9,.33,wood);
@@ -267,11 +290,13 @@ box(-3.7,1.0,10.45,4.25,2.9,.25,[.43,.30,.20]);
 box(-3.7,3.6,10.55,4.45,.30,.32,woodLight);
 box(-3.7,1.3,10.62,3.65,2.05,.1,[.77,.67,.44]);
 solidBox(-3.7,10.25,4.35,.55,3.9);
+endCampGroup('board');beginCampGroup('sign');
 // Decorative signpost marking the camp.
 box(-19,.03,12,.35,3.8,.35,wood);
 box(-19,2.8,12,3,.85,.24,woodLight);solidBox(-19,12,.35,.35);
 
 
+endCampGroup('sign');beginCampGroup('shower');
 // Shower shelter, deliberately open at its front. Its handle is an interactable fixture.
 const showerWood=[.47,.34,.23], showerWall=[.63,.63,.55];
 box(18,.03,9,5,.22,5,showerWood);
@@ -285,6 +310,7 @@ box(18,3.1,9,.12,1.1,.12,[.71,.73,.72]);
 box(18,.95,11.18,.45,.45,.15,[.49,.54,.56]);
 solidBox(18,6.7,4.9,.2,3.8);solidBox(15.7,9,.2,4.5,3.8);solidBox(20.3,9,.2,4.5,3.8);
 box(18,.03,9,4.5,.1,4.4,[.42,.44,.39]);
+endCampGroup('shower');beginCampGroup('axe');
 // Chopping station: the axe is fixed visually in its log and remains after every pickup.
 box(2,.02,15,2.8,.8,2.0,wood);
 solidBox(2,15,2.8,2,.8);
@@ -292,6 +318,7 @@ box(2,1.0,15,.22,2.3,.22,[.55,.34,.19]);
 box(2.45,2.65,15,.95,.72,.20,[.68,.72,.74]);
 box(2.85,2.65,15,.20,.73,.22,[.45,.48,.51]);
 
+endCampGroup('axe');beginCampGroup('rack');
 // A dedicated wood rack beside the fire. Stores 10 stacks of 10 logs.
 const rackX=5.45,rackZ=-4.5;
 for(const dx of [-1.05,1.05]){
@@ -307,6 +334,7 @@ for(let i=0;i<7;i++){
  box(rackX,.45,rackZ===0?0:z,1.75,.28,.24,[.53,.34,.19]);
 }
 solidBox(rackX,rackZ,2.55,3.10,2.4);
+endCampGroup('rack');
 // Bring the original oversized campsite into a more believable human scale.
 const campHorizontalScale=.70,campVerticalScale=.55;
 for(let i=campStartVertex;i<positions.length/3;i++){
@@ -319,6 +347,17 @@ for(let i=campStartObstacle;i<obstacles.length;i++){
   if(o.kind==='box'){o.w*=campHorizontalScale;o.d*=campHorizontalScale;}
   else o.r*=campHorizontalScale;
   o.height*=campVerticalScale;
+}
+// Relocate every complete group, including flames and physical colliders.
+for(const [id,[dx,dz]] of Object.entries(campLayoutShifts)){
+ const range=campGroupRanges[id];
+ if(!range)throw Error('Camp group missing: '+id);
+ for(let i=range.startV;i<range.endV;i++){
+  positions[3*i]+=dx;positions[3*i+2]+=dz;
+ }
+ for(let i=range.startO;i<range.endO;i++){
+  obstacles[i].x+=dx;obstacles[i].z+=dz;
+ }
 }
 // Litter collects in the forest, not in the maintained campsite.
 // Sparse at the forest's edge and more abundant beyond the clearing.
@@ -342,7 +381,7 @@ for(let i=0;i<240;i++){
 // Toggleable shower droplets are added separately so the faucet can switch off.
 const showerWaterStart=positions.length/3;
 for(let i=0;i<9;i++){
- const x=12.6+(rnd(701+i)-.5)*.8,z=6.3+(rnd(904+i)-.5)*.75;
+ const x=12.6+campLayoutShifts.shower[0]+(rnd(701+i)-.5)*.8,z=6.3+campLayoutShifts.shower[1]+(rnd(904+i)-.5)*.75;
  box(x,1.0+rnd(331+i)*.65,z,.035,.65,.035,[.36,.73,.91]);
 }
 const showerWaterEnd=positions.length/3;
@@ -691,6 +730,14 @@ const usable=[
  {id:'bench1',name:'Dining bench',x:7.7,z:-2.38,w:3.92,d:.56,reach:1.5},
  {id:'bench2',name:'Dining bench',x:7.7,z:-6.02,w:3.92,d:.56,reach:1.5}
 ];
+// All proximity triggers follow the exact same translations as the visual props.
+const usableGroup={board:'board',tent:'tent',fire:'fire',storage:'supplies',
+ logstore:'rack',shower:'shower',axe:'axe',seat1:'seat1',seat2:'seat2',
+ bench1:'dining',bench2:'dining'};
+for(const obj of usable){
+ const shift=campLayoutShifts[usableGroup[obj.id]];
+ if(shift){obj.x+=shift[0];obj.z+=shift[1];}
+}
 function resolveObject(id){return usable.find(o=>o.id===id)||forestTrees.find(t=>t.id===id&&!t.chopped);}
 function distanceToObject(obj,x,z){
  const dx=Math.max(0,Math.abs(x-obj.x)-obj.w/2),dz=Math.max(0,Math.abs(z-obj.z)-obj.d/2);
@@ -989,17 +1036,17 @@ document.getElementById('boardOwnerSave').addEventListener('click',()=>{
  if(sharedBoard)refreshBoard();else renderBoardMessages();
 });
 
-let camera=[0,eyeHeight,14],yaw=0,pitch=-.13,fly=false,axis=[0,0],drag=null,keys={},last=performance.now();
+let camera=[0,eyeHeight,16],yaw=0,pitch=-.13,fly=false,axis=[0,0],drag=null,keys={},last=performance.now();
 const pad=document.getElementById('pad'),knob=document.getElementById('knob');let padPointer=null;
 function movePad(e){let r=pad.getBoundingClientRect(),dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2),max=r.width*.34,len=Math.hypot(dx,dy);if(len>max){dx*=max/len;dy*=max/len;}axis=[dx/max,-dy/max];knob.style.transform='translate('+dx+'px,'+dy+'px)';}
 pad.addEventListener('pointerdown',e=>{e.preventDefault();padPointer=e.pointerId;pad.setPointerCapture(e.pointerId);movePad(e);});pad.addEventListener('pointermove',e=>{if(e.pointerId===padPointer)movePad(e);});
 function stopPad(e){if(e.pointerId===padPointer){padPointer=null;axis=[0,0];knob.style.transform='translate(0,0)';}}for(const ev of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(ev,stopPad);
 canvas.addEventListener('pointerdown',e=>{drag=[e.pointerId,e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointermove',e=>{if(!drag||drag[0]!==e.pointerId)return;yaw+=(e.clientX-drag[1])*.0055;pitch=Math.max(-1.15,Math.min(1.15,pitch-(e.clientY-drag[2])*.004));drag=[e.pointerId,e.clientX,e.clientY];});for(const ev of ['pointerup','pointercancel'])canvas.addEventListener(ev,()=>drag=null);
-document.getElementById('fly').addEventListener('click',e=>{fly=!fly;e.currentTarget.textContent=fly?'✦ Walking mode':'✦ Fly mode';diag.textContent=fly?'FLY MODE: collisions disabled':'WALK MODE: collisions enabled';updateNearby();});document.getElementById('reset').addEventListener('click',()=>{camera=[0,eyeHeight,14];yaw=0;pitch=-.13;updateNearby();});
+document.getElementById('fly').addEventListener('click',e=>{fly=!fly;e.currentTarget.textContent=fly?'✦ Walking mode':'✦ Fly mode';diag.textContent=fly?'FLY MODE: collisions disabled':'WALK MODE: collisions enabled';updateNearby();});document.getElementById('reset').addEventListener('click',()=>{camera=[0,eyeHeight,16];yaw=0;pitch=-.13;updateNearby();});
 window.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code.startsWith('Arrow'))e.preventDefault();});window.addEventListener('keyup',e=>keys[e.code]=false);window.addEventListener('blur',()=>{axis=[0,0];keys={};knob.style.transform='translate(0,0)';});
 status.style.display='none';diag.textContent='Ready: '+count+' vertices';
 let frameNumber=0;function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=(walkingHeight(camera[0],camera[2])+(seatedAt?1.02:eyeHeight)-camera[1])*.14;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(w<768?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v1.6 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(w<768?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v1.7 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
