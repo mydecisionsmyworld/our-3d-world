@@ -26,14 +26,19 @@
 .hotbar-slot .qty{position:absolute;right:3px;bottom:1px;font-size:12px;font-weight:800;text-shadow:0 1px 2px #111}
 #pad{bottom:max(100px,calc(env(safe-area-inset-bottom) + 80px))}
 #buttons{bottom:max(104px,calc(env(safe-area-inset-bottom) + 84px))}
+#hotbar .hotbar-slot{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#hotbar .hotbar-slot.drag-source{opacity:.38}
+#dragGhost{position:fixed;left:0;top:0;transform:translate(-50%,-50%);pointer-events:none;display:none;background:#454b3c;border:2px solid #e2cc8c;border-radius:8px;padding:9px;font-size:25px;z-index:100;box-shadow:0 8px 22px #0008}
+#interaction{max-height:44vh;overflow-y:auto}
+#interactionActions button{flex-shrink:0}
 @media(max-width:370px){#guide{display:none}#pad{width:112px;height:112px}#knob{width:42px;height:42px}}
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:10px">v1.0</small></h1><p>A home in the forest · tree chopping</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:10px">v1.1</small></h1><p>A home in the forest · camp storage</p></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
 <div id="pad" aria-label="Movement joystick"><div id="knob"></div></div>
-<div id="buttons"><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button></div><div id="hotbar" aria-label="Five inventory slots"></div>
+<div id="buttons"><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button></div><div id="hotbar" aria-label="Five inventory slots"></div><div id="dragGhost" aria-hidden="true"></div>
 <section id="interaction" aria-live="polite"><strong id="interactionName"></strong><p id="interactionInfo"></p><div id="interactionActions"></div><div id="chopProgress"><div id="chopFill"></div></div></section><div id="toast" role="status"></div>
 <div id="status">Growing the woodland...</div><div id="diag" style="position:absolute;top:76px;left:16px;border-radius:8px;background:#123a37c9;color:#fff;font:11px monospace;padding:7px;pointer-events:none">Starting renderer...</div>
 <script>
@@ -161,6 +166,21 @@ box(2,1.0,15,.22,2.3,.22,[.55,.34,.19]);
 box(2.45,2.65,15,.95,.72,.20,[.68,.72,.74]);
 box(2.85,2.65,15,.20,.73,.22,[.45,.48,.51]);
 
+// A dedicated wood rack beside the fire. Stores 10 stacks of 10 logs.
+const rackX=5.45,rackZ=-4.5;
+for(const dx of [-1.05,1.05]){
+ box(rackX+dx,.08,rackZ-1.20,.22,2.20,.22,woodLight);
+ box(rackX+dx,.08,rackZ+1.20,.22,2.20,.22,woodLight);
+}
+box(rackX,.1,rackZ,2.55,.21,3.1,wood);
+box(rackX,2.28,rackZ,2.55,.22,3.1,woodLight);
+box(rackX-.95,.6,rackZ,.13,1.55,2.7,woodLight);
+box(rackX+.95,.6,rackZ,.13,1.55,2.7,woodLight);
+for(let i=0;i<7;i++){
+ const z=rackZ-1.05+i*.34;
+ box(rackX,.45,rackZ===0?0:z,1.75,.28,.24,[.53,.34,.19]);
+}
+solidBox(rackX,rackZ,2.55,3.10,2.4);
 // Bring the original oversized campsite into a more believable human scale.
 const campHorizontalScale=.70,campVerticalScale=.55;
 for(let i=campStartVertex;i<positions.length/3;i++){
@@ -238,6 +258,26 @@ try{const saved=JSON.parse(localStorage.getItem('woodland-camp-objects-v1')||'nu
   }
 }catch(e){}
 function saveWorld(){try{localStorage.setItem('woodland-camp-objects-v1',JSON.stringify(world));}catch(e){}}
+// Shared container data: wood rack holds 100 logs as 10 stacks of 10.
+// General storage accepts any currently defined inventory item.
+const containersKey='woodland-camp-containers-v1';
+let containers={logs:0,general:{food:Math.max(0,world.storedFood),axe:0,wood:0}};
+try{
+ const saved=JSON.parse(localStorage.getItem(containersKey)||'null');
+ if(saved&&typeof saved==='object'){
+  if(Number.isSafeInteger(saved.logs))containers.logs=Math.max(0,Math.min(100,saved.logs));
+  if(saved.general&&typeof saved.general==='object')
+    for(const k of ['food','axe','wood'])if(Number.isSafeInteger(saved.general[k]))
+      containers.general[k]=Math.max(0,saved.general[k]);
+ }
+}catch(e){}
+function saveContainers(){
+ world.storedFood=containers.general.food;saveWorld();
+ try{localStorage.setItem(containersKey,JSON.stringify(containers));}catch(e){}
+}
+function namedItem(id){return id==='wood'?'wood':id==='axe'?'axes':'food';}
+function generalTotal(){return Object.values(containers.general).reduce((a,b)=>a+b,0);}
+
 // Each browser visitor has an independent five-slot local inventory.
 // Axes are stackable, so the stationary axe can be claimed indefinitely.
 const inventoryKey='woodland-camp-hotbar-v1';
@@ -276,6 +316,12 @@ function addItem(id,quantity=1){
  world.looseFood=itemQuantity('food');
  saveInventory();saveWorld();renderHotbar();return true;
 }
+function removeFromSlot(index,quantity){
+ const slot=inventory[index];
+ if(!slot||quantity<1||slot.qty<quantity)return false;
+ slot.qty-=quantity;if(slot.qty===0)inventory[index]=null;
+ world.looseFood=itemQuantity('food');saveInventory();saveWorld();renderHotbar();return true;
+}
 function removeItem(id,quantity=1){
  if(itemQuantity(id)<quantity)return false;
  let remaining=quantity;
@@ -289,6 +335,7 @@ function removeItem(id,quantity=1){
 }
 const hotbar=document.getElementById('hotbar');
 function renderHotbar(){
+ if(dragState?.active)return;
  hotbar.replaceChildren();
  inventory.forEach((slot,i)=>{
   const btn=document.createElement('button');btn.className='hotbar-slot'+(i===selectedSlot?' selected':'');
@@ -298,9 +345,65 @@ function renderHotbar(){
    const icon=document.createElement('span');icon.textContent=slot.id==='axe'?'🪓':slot.id==='wood'?'🪵':'🍎';btn.appendChild(icon);
    const count=document.createElement('span');count.className='qty';count.textContent=String(slot.qty);btn.appendChild(count);
   }
-  btn.addEventListener('click',()=>{selectedSlot=i;renderHotbar();updateNearby();renderInteraction();});hotbar.appendChild(btn);
+  btn.dataset.slot=String(i);
+  hotbar.appendChild(btn);
  });
 }
+// Long-press on mobile and click-drag on desktop, with a shared pointer path.
+let dragState=null;
+const dragGhost=document.getElementById('dragGhost');
+function setSelectedSlot(i){selectedSlot=i;renderHotbar();updateNearby();renderInteraction();}
+function moveDragGhost(x,y){dragGhost.style.left=x+'px';dragGhost.style.top=y+'px';}
+function finishDrag(e,cancel=false){
+ if(!dragState||e.pointerId!==dragState.pointerId)return;
+ const state=dragState;dragState=null;
+ if(state.timer)clearTimeout(state.timer);
+ dragGhost.style.display='none';
+ hotbar.querySelectorAll('.drag-source').forEach(b=>b.classList.remove('drag-source'));
+ if(state.active&&!cancel){
+  const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('.hotbar-slot');
+  const dest=target?Number(target.dataset.slot):-1;
+  if(dest>=0&&dest<5&&dest!==state.source){
+   const from=inventory[state.source],to=inventory[dest];
+   if(from){
+    if(to?.id==='wood'&&from.id==='wood'){
+     const space=10-to.qty;const moved=Math.min(space,from.qty);
+     if(moved>0){to.qty+=moved;from.qty-=moved;if(from.qty===0)inventory[state.source]=null;}
+     else [inventory[state.source],inventory[dest]]=[inventory[dest],inventory[state.source]];
+    }else [inventory[state.source],inventory[dest]]=[inventory[dest],inventory[state.source]];
+    saveInventory();
+   }
+  }
+ }else if(!state.active&&!cancel)setSelectedSlot(state.source);
+ renderHotbar();
+ updateNearby();renderInteraction();
+}
+hotbar.addEventListener('pointerdown',e=>{
+ const btn=e.target.closest('.hotbar-slot');
+ if(!btn||dragState)return;
+ const source=Number(btn.dataset.slot);
+ if(!Number.isInteger(source))return;
+ dragState={source,pointerId:e.pointerId,x:e.clientX,y:e.clientY,active:false,
+  touch:e.pointerType==='touch',timer:null};
+ const st=dragState;
+ if(st.touch){
+  st.timer=setTimeout(()=>{if(dragState!==st||!inventory[source])return;startDrag(st);},370);
+ }else if(inventory[source])startDrag(st);
+ function startDrag(state){
+  state.active=true;dragGhost.textContent=inventory[source].id==='axe'?'🪓':inventory[source].id==='wood'?'🪵':'🍎';
+  dragGhost.style.display='block';btn.classList.add('drag-source');moveDragGhost(state.x,state.y);
+ }
+ try{hotbar.setPointerCapture(e.pointerId);}catch(err){}
+ e.preventDefault();
+});
+hotbar.addEventListener('pointermove',e=>{
+ if(!dragState||dragState.pointerId!==e.pointerId)return;
+ dragState.x=e.clientX;dragState.y=e.clientY;
+ if(dragState.active)moveDragGhost(e.clientX,e.clientY);
+});
+hotbar.addEventListener('pointerup',e=>finishDrag(e));
+hotbar.addEventListener('pointercancel',e=>finishDrag(e,true));
+window.addEventListener('blur',()=>{if(dragState){dragGhost.style.display='none';if(dragState.timer)clearTimeout(dragState.timer);dragState=null;renderHotbar();}});
 renderHotbar();
 world.looseFood=itemQuantity('food');
 saveWorld();
@@ -311,7 +414,8 @@ let chopJob=null;
 const usable=[
  {id:'tent',name:'Canvas tent',x:-6.3,z:-4.9,w:5.18,d:5.18,reach:2.3},
  {id:'fire',name:'Campfire',x:.7,z:-2.8,w:3.2,d:3.2,reach:2.15},
- {id:'storage',name:'Food storage',x:-8.3,z:4.45,w:3.65,d:3.6,reach:2.35},
+ {id:'storage',name:'General storage',x:-8.3,z:4.45,w:3.65,d:3.6,reach:2.35},
+ {id:'logstore',name:'Log store',x:3.815,z:-3.15,w:1.8,d:2.17,reach:2.1},
  {id:'shower',name:'Shower block',x:12.6,z:6.3,w:3.5,d:3.5,reach:2.5},
  {id:'axe',name:'Chopping log and axe',x:1.4,z:10.5,w:1.96,d:1.4,reach:2.2},
  {id:'seat1',name:'Campfire log seat',x:-.7,z:1.4,w:3.22,d:.6,reach:1.7},
@@ -324,6 +428,7 @@ function distanceToObject(obj,x,z){
  const dx=Math.max(0,Math.abs(x-obj.x)-obj.w/2),dz=Math.max(0,Math.abs(z-obj.z)-obj.d/2);
  return Math.hypot(dx,dz);
 }
+function hasSpaceFor(id){return inventory.some(slot=>slot===null||slot.id===id&&slot.qty<(id==='wood'?10:Number.MAX_SAFE_INTEGER));}
 function availableActions(id){
  if(id.startsWith('tree-')){
   const tree=resolveObject(id);
@@ -334,7 +439,25 @@ function availableActions(id){
  }
  if(id==='tent')return [{id:world.tentSleeping?'wake':'sleep',label:world.tentSleeping?'Finish sleeping':'Sleep'}];
  if(id==='fire')return [{id:world.fireLit?'extinguish':'light',label:world.fireLit?'Extinguish fire':'Light fire'}];
- if(id==='storage')return [{id:'store',label:'Store food',disabled:itemQuantity('food')===0},{id:'take',label:'Take food',disabled:world.storedFood===0}];
+ if(id==='logstore'){
+  const selected=inventory[selectedSlot];
+  return [
+    {id:'depositLogs',label:'Store selected wood stack',disabled:!selected||selected.id!=='wood'||containers.logs===100},
+    {id:'withdrawLogs',label:'Take up to 10 wood',disabled:containers.logs===0||woodCapacity()===0}
+  ];
+ }
+ if(id==='storage'){
+   const slot=inventory[selectedSlot],actions=[];
+   if(slot){
+    actions.push({id:'storeOne',label:'Store 1 '+namedItem(slot.id)});
+    actions.push({id:'storeStack',label:'Store selected stack ('+slot.qty+')'});
+   }
+   for(const id of ['food','axe','wood'])
+     if(containers.general[id]>0)
+       actions.push({id:'take_'+id,label:'Take '+(id==='wood'?'up to 10 ':'1 ')+namedItem(id),
+        disabled:id==='wood'?woodCapacity()===0:!hasSpaceFor(id)});
+   return actions;
+ }
  if(id==='shower')return [{id:world.showerOn?'showerOff':'showerOn',label:world.showerOn?'Turn shower off':'Turn shower on'}];
  if(id==='axe')return [{id:'takeAxe',label:'Take an axe',disabled:!inventory.some(slot=>!slot||slot.id==='axe')}];
  if(id.startsWith('seat')||id.startsWith('bench'))return [{id:seatedAt===id?'stand':'sit',label:seatedAt===id?'Stand up':'Sit down'}];
@@ -358,9 +481,31 @@ function performAction(objectId,actionId){
  } else if(objectId==='fire'){
    world.fireLit=actionId==='light';
    message=world.fireLit?'The campfire is lit.':'The campfire is out.';
+ } else if(objectId==='logstore'){
+   if(actionId==='depositLogs'){
+    const slot=inventory[selectedSlot],quantity=Math.min(slot.qty,100-containers.logs);
+    if(quantity<1||!removeFromSlot(selectedSlot,quantity))return {ok:false,message:'Cannot store wood.'};
+    containers.logs+=quantity;message='Stored '+quantity+' wood in the log rack.';
+   }else{
+    const quantity=Math.min(10,containers.logs,woodCapacity());
+    if(quantity<1||!addItem('wood',quantity))return {ok:false,message:'No room for wood.'};
+    containers.logs-=quantity;message='Took '+quantity+' wood from the log rack.';
+   }
+   saveContainers();
  } else if(objectId==='storage'){
-   if(actionId==='store'){removeItem('food');world.storedFood++;message='One food portion stored.';}
-   else if(actionId==='take'){if(addItem('food')){world.storedFood--;message='One food portion taken out.';}else return {ok:false,message:'Your inventory is full.'};}
+   if(actionId==='storeOne'||actionId==='storeStack'){
+    const slot=inventory[selectedSlot];if(!slot)return {ok:false,message:'Select an item first.'};
+    const id=slot.id,quantity=actionId==='storeOne'?1:slot.qty;
+    if(!removeFromSlot(selectedSlot,quantity))return {ok:false,message:'Cannot store that item.'};
+    containers.general[id]+=quantity;saveContainers();
+    message='Stored '+quantity+' '+namedItem(id)+'.';
+   }else if(actionId.startsWith('take_')){
+    const id=actionId.slice(5);
+    if(!Object.hasOwn(containers.general,id))return {ok:false,message:'Unknown item.'};
+    const quantity=id==='wood'?Math.min(10,containers.general[id],woodCapacity()):1;
+    if(quantity<1||!addItem(id,quantity))return {ok:false,message:'No inventory space.'};
+    containers.general[id]-=quantity;saveContainers();message='Took '+quantity+' '+namedItem(id)+'.';
+   }
  } else if(objectId==='shower'){
    world.showerOn=actionId==='showerOn';
    message=world.showerOn?'Shower turned on.':'Shower turned off.';
@@ -399,8 +544,10 @@ function renderInteraction(){
  if(!obj){interact.style.display='none';return;}
  interact.style.display='block';iname.textContent=obj.name;
  document.getElementById('chopProgress').style.display=chopJob?.id===obj.id?'block':'none';
- if(obj.id.startsWith('tree-'))iinfo.textContent='Chop time: '+obj.duration.toFixed(1)+'s | Yield: '+obj.wood+' wood | '+(inventory[selectedSlot]?.id==='axe'?'Axe equipped':'Select an axe in hotbar')+(woodCapacity()<obj.wood?' | Inventory full':'');
- else if(obj.id==='storage')iinfo.textContent='In crate: '+world.storedFood+' food | Inventory: '+itemQuantity('food')+' food';
+ if(obj.id==='logstore')iinfo.textContent='Wood stored: '+containers.logs+'/100 · '+Math.ceil(containers.logs/10)+'/10 stacks';
+ else if(obj.id==='storage')iinfo.textContent='Contents: '+(['food','axe','wood'].filter(id=>containers.general[id]>0).map(id=>namedItem(id)+' '+containers.general[id]).join(' · ')||'Empty');
+ else if(obj.id.startsWith('tree-'))iinfo.textContent='Chop time: '+obj.duration.toFixed(1)+'s | Yield: '+obj.wood+' wood | '+(inventory[selectedSlot]?.id==='axe'?'Axe equipped':'Select an axe in hotbar')+(woodCapacity()<obj.wood?' | Inventory full':'');
+
  else if(obj.id==='fire')iinfo.textContent=world.fireLit?'Currently burning':'Currently unlit';
  else if(obj.id==='shower')iinfo.textContent=world.showerOn?'Water is running':'Water is turned off';
  else if(obj.id==='axe')iinfo.textContent='Reusable supply: the world axe never disappears';
@@ -438,7 +585,7 @@ document.getElementById('fly').addEventListener('click',e=>{fly=!fly;e.currentTa
 window.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code.startsWith('Arrow'))e.preventDefault();});window.addEventListener('keyup',e=>keys[e.code]=false);window.addEventListener('blur',()=>{axis=[0,0];keys={};knob.style.transform='translate(0,0)';});
 status.style.display='none';diag.textContent='Ready: '+count+' vertices';
 let frameNumber=0;function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(ground(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=seatedAt||chopJob?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=(ground(camera[0],camera[2])+(seatedAt?1.02:eyeHeight)-camera[1])*.14;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v1.0 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v1.1 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
