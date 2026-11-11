@@ -36,7 +36,7 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           const html = fs.readFileSync('index.html', 'utf8');
-          const match = html.match(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/i);
+          const match = html.match(new RegExp('<script[^>]*>([\\s\\S]*?)</script>', 'i'));
           if (!match) throw new Error('No inline game script found');
           new Function(match[1]);
           if (!html.includes('</html>')) throw new Error('HTML document is incomplete');
