@@ -532,7 +532,6 @@ function advanceWoodlandAnimals(dt,now){
   a.turnIn-=dt;
   const fleeing=distance<8&&!fly;
   if(fleeing){
-   const target=Math.atan2(-dx,-dz)+Math.PI;
    // Convert escape direction into model heading: model forward points to -Z.
    const desired=Math.atan2(-dx,-dz);
    const normal=Math.atan2(Math.sin(desired-a.heading),Math.cos(desired-a.heading));
@@ -687,6 +686,7 @@ function saveContainers(){
 function itemQuantity(id){return slotCount(inventory,id);}
 function woodCapacity(){return freeCapacity(inventory,'wood');}
 function hasSpaceFor(id){return freeCapacity(inventory,id)>0;}
+function canCookOne(){return itemQuantity('rawMeat')>0&&(hasSpaceFor('cookedMeat')||inventory.some(slot=>slot?.id==='rawMeat'&&slot.qty===1));}
 function addItem(id,quantity=1){
  if(!validItems.includes(id)||!Number.isSafeInteger(quantity)||quantity<1||freeCapacity(inventory,id)<quantity)return false;
  if(insertQuantity(inventory,id,quantity)!==0)return false;
@@ -888,7 +888,7 @@ function availableActions(id){
  }
  if(id==='cook')return [
   {id:'takeSpear',label:'Take reusable spear',disabled:!hasSpaceFor('spear')},
-  {id:'cookMeat',label:'Cook 1 raw meat',disabled:itemQuantity('rawMeat')<1||!hasSpaceFor('cookedMeat')},
+  {id:'cookMeat',label:'Cook 1 raw meat',disabled:!canCookOne()},
   {id:'eatMeal',label:'Eat cooked meat',disabled:itemQuantity('cookedMeat')<1}];
  if(id.startsWith('tree-')){
   const tree=resolveObject(id);
@@ -923,8 +923,8 @@ function performAction(objectId,actionId){
     if(!addItem('spear'))return {ok:false,message:'Inventory full.'};
     message='Spear added. Select it in the hotbar to hunt animals.';
    }else if(actionId==='cookMeat'){
-    if(itemQuantity('rawMeat')<1||!hasSpaceFor('cookedMeat'))return {ok:false,message:'Need raw meat and a free slot.'};
-    removeItem('rawMeat',1);addItem('cookedMeat',1);message='Cooked meat ready! Select it and tap Eat.';
+    if(!canCookOne())return {ok:false,message:'Need raw meat and a free slot.'};
+    removeItem('rawMeat',1);if(!addItem('cookedMeat',1))return {ok:false,message:'Unable to store cooked meat.'};message='Cooked meat ready! Select it and tap Eat.';
    }else if(actionId==='eatMeal'){
     removeItem('cookedMeat',1);message='You enjoyed a warm cooked meal. 🍖';
    }
