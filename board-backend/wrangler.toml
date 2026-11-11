@@ -1,0 +1,11 @@
+name = "woodland-camp-board"
+main = "src/index.js"
+compatibility_date = "2026-11-11"
+
+[vars]
+ALLOWED_ORIGIN = "https://mydecisionsmyworld.github.io"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "woodland-camp-board"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
