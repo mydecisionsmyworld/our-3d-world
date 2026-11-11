@@ -69,10 +69,10 @@
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v2.0</small></h1><p>Camp layout refreshed · seats opposite · wood area east</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v2.1</small></h1><p>Woodland wildlife · hunting · camp cooking</p></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
 <div id="pad" aria-label="Movement joystick"><div id="knob"></div></div>
-<div id="buttons"><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button></div><div id="hotbar" aria-label="Five inventory slots"></div><div id="dragGhost" aria-hidden="true"></div>
+<div id="buttons"><button id="eat" style="display:none;background:#45673c">🍖 Eat</button><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button></div><div id="hotbar" aria-label="Five inventory slots"></div><div id="dragGhost" aria-hidden="true"></div>
 <section id="interaction" aria-live="polite"><strong id="interactionName"></strong><p id="interactionInfo"></p><div id="interactionActions"></div><div id="chopProgress"><div id="chopFill"></div></div></section><div id="toast" role="status"></div>
 <div id="storageOverlay" role="dialog" aria-modal="true" aria-label="Storage inventory">
  <div id="storageWindow">
@@ -110,7 +110,7 @@
 'use strict';
 const diag=document.getElementById('diag');window.addEventListener('error',e=>{diag.textContent='ERROR: '+e.message;diag.style.background='#992323';});const canvas=document.getElementById('world'),status=document.getElementById('status'),gl=canvas.getContext('webgl',{alpha:false,antialias:true,powerPreference:'default'});
 if(!gl){status.textContent='WebGL is unavailable. Try Chrome or Safari.';return;}
-const vert='attribute vec3 p,c,n;uniform mat4 proj,view;varying vec3 color;varying float fog;void main(){vec4 q=view*vec4(p,1.);gl_Position=proj*q;float light=.68+.32*max(dot(normalize(n),normalize(vec3(.4,.9,.5))),0.);color=c*light;fog=clamp((-q.z-35.)/165.,0.,.87);}';
+const vert='attribute vec3 p,c,n;uniform mat4 proj,view;uniform vec3 animalShift;uniform float animalHeading;varying vec3 color;varying float fog;void main(){float a=cos(animalHeading),b=sin(animalHeading);vec3 w=vec3(a*p.x+b*p.z,p.y,-b*p.x+a*p.z)+animalShift;vec3 qn=vec3(a*n.x+b*n.z,n.y,-b*n.x+a*n.z);vec4 q=view*vec4(w,1.);gl_Position=proj*q;float light=.68+.32*max(dot(normalize(qn),normalize(vec3(.4,.9,.5))),0.);color=c*light;fog=clamp((-q.z-35.)/165.,0.,.87);}';
 const frag='precision mediump float;varying vec3 color;varying float fog;void main(){gl_FragColor=vec4(mix(color,vec3(.69,.81,.87),fog),1.);}';
 function shader(type,src){let s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
 let prog;try{prog=gl.createProgram();gl.attachShader(prog,shader(gl.VERTEX_SHADER,vert));gl.attachShader(prog,shader(gl.FRAGMENT_SHADER,frag));gl.linkProgram(prog);if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(prog));}catch(e){status.textContent='Graphics failed: '+e.message;return;}gl.useProgram(prog);
@@ -428,6 +428,16 @@ for(const t of [.2,.55,.9]){
   box(px,-2.65,pz,.21,Math.max(.1,height+2.72),.21,[.32,.23,.14]);
  }
 }
+// Compact cooking station next to the dining bench, with a reusable camp spear.
+const cookX=13.1,cookZ=-8.8;
+for(let i=0;i<9;i++){const a=i*Math.PI*2/9;box(cookX+Math.cos(a)*.93,.015,cookZ+Math.sin(a)*.93,.52,.32,.42,[.43,.44,.40]);}
+box(cookX,.13,cookZ,1.35,.17,1.15,[.27,.27,.25]);
+for(const dx of [-.58,.58])for(const dz of [-.53,.53])box(cookX+dx,.2,cookZ+dz,.11,1.3,.11,wood);
+for(let i=0;i<6;i++)box(cookX-.53+i*.21,1.38,cookZ,.085,.09,1.38,[.48,.49,.48]);
+box(cookX+1.8,.04,cookZ,2,.14,1.2,wood);
+for(const dx of [-.75,.75])box(cookX+1.8+dx,.015,cookZ,.18,1.02,.18,wood);
+box(cookX+1.95,1.02,cookZ,.11,.13,1.42,[.53,.35,.18]);
+box(cookX+1.95,1.12,cookZ-.73,.28,.23,.33,[.67,.69,.69]);
 // Large rocks are genuine obstacles; tiny stones and sticks above are not.
 for(let i=0;i<14;i++){
   const a=(i+.35*rnd(i+17))*Math.PI*2/14,r=28+rnd(i+34)*8;
@@ -479,11 +489,11 @@ function saveWorld(){try{localStorage.setItem('woodland-camp-objects-v1',JSON.st
 // General storage accepts any currently defined inventory item.
 const containersKey='woodland-camp-containers-v2';
 const inventoryKey='woodland-camp-hotbar-v1';
-const validItems=['food','axe','wood'];
+const validItems=['food','axe','wood','spear','rawMeat','cookedMeat'];
 const MAX_STACK=10;
 function newSlots(count){return Array.from({length:count},()=>null);}
-function itemIcon(id){return id==='axe'?'🪓':id==='wood'?'🪵':'🍎';}
-function namedItem(id){return id==='wood'?'wood':id==='axe'?'axes':'food';}
+function itemIcon(id){return ({axe:'🪓',wood:'🪵',food:'🍎',spear:'🔱',rawMeat:'🥩',cookedMeat:'🍖'})[id]||'📦';}
+function namedItem(id){return ({wood:'wood',axe:'axes',food:'apples',spear:'spears',rawMeat:'raw meat',cookedMeat:'cooked meat'})[id]||id;}
 function insertQuantity(slots,id,quantity){
  if(!validItems.includes(id)||!Number.isSafeInteger(quantity)||quantity<0)return 0;
  let remaining=quantity;
@@ -499,13 +509,13 @@ function slotCount(slots,id){return slots.reduce((n,slot)=>n+(slot?.id===id?slot
 function freeCapacity(slots,id){return slots.reduce((n,slot)=>n+(!slot?MAX_STACK:slot.id===id?MAX_STACK-slot.qty:0),0);}
 function validSlot(value){return !!value&&validItems.includes(value.id)&&Number.isSafeInteger(value.qty)&&value.qty>0;}
 function migrateSlots(raw,count){
- const result=newSlots(count),overflow={food:0,axe:0,wood:0};
+ const result=newSlots(count),overflow=Object.fromEntries(validItems.map(id=>[id,0]));
  if(Array.isArray(raw))for(const item of raw)if(validSlot(item))overflow[item.id]+=item.qty;
  for(const id of validItems)overflow[id]=insertQuantity(result,id,overflow[id]);
  return {slots:result,overflow};
 }
 let inventory=newSlots(5);
-let legacyOverflow={food:0,axe:0,wood:0};
+let legacyOverflow=Object.fromEntries(validItems.map(id=>[id,0]));
 try{
  const raw=JSON.parse(localStorage.getItem(inventoryKey)||'null');
  if(Array.isArray(raw)){
@@ -513,7 +523,7 @@ try{
  }else insertQuantity(inventory,'food',Math.max(0,world.looseFood));
 }catch(e){insertQuantity(inventory,'food',Math.max(0,world.looseFood));}
 let containerSlots={logs:newSlots(10),general:newSlots(20)};
-let unplacedLegacy={food:0,axe:0,wood:0};
+let unplacedLegacy=Object.fromEntries(validItems.map(id=>[id,0]));
 try{
  const saved=JSON.parse(localStorage.getItem(containersKey)||'null');
  if(saved&&Array.isArray(saved.logs)&&Array.isArray(saved.general)){
@@ -611,6 +621,7 @@ function renderHotbar(){
  if(dragState?.active)return;
  hotbar.replaceChildren();
  inventory.forEach((slot,i)=>hotbar.appendChild(slotMarkup(slot,i,'hotbar')));
+ document.getElementById('eat').style.display=['food','cookedMeat'].includes(inventory[selectedSlot]?.id)?'block':'none';
 }
 function renderStorageWindow(){
  if(!storageOpen)return;
@@ -735,7 +746,8 @@ const usable=[
  {id:'seat1',name:'Campfire log seat',x:-.7,z:1.4,w:3.22,d:.6,reach:1.7},
  {id:'seat2',name:'Woodland log seat',x:3.5,z:1.19,w:2.8,d:.6,reach:1.7},
  {id:'bench1',name:'Dining bench',x:7.7,z:-2.38,w:3.92,d:.56,reach:1.5},
- {id:'bench2',name:'Dining bench',x:7.7,z:-6.02,w:3.92,d:.56,reach:1.5}
+ {id:'bench2',name:'Dining bench',x:7.7,z:-6.02,w:3.92,d:.56,reach:1.5},
+ {id:'cook',name:'Woodland cooking station',x:13.1,z:-8.8,w:2.7,d:2.1,reach:2.2}
 ];
 // All proximity triggers follow the exact same translations as the visual props.
 const usableGroup={board:'board',tent:'tent',fire:'fire',storage:'supplies',
@@ -745,13 +757,22 @@ for(const obj of usable){
  const shift=campLayoutShifts[usableGroup[obj.id]];
  if(shift){obj.x+=shift[0];obj.z+=shift[1];}
 }
-function resolveObject(id){return usable.find(o=>o.id===id)||forestTrees.find(t=>t.id===id&&!t.chopped);}
+function resolveObject(id){return usable.find(o=>o.id===id)||forestTrees.find(t=>t.id===id&&!t.chopped)||woodlandAnimals.find(a=>a.id===id&&a.alive);}
 function distanceToObject(obj,x,z){
  const dx=Math.max(0,Math.abs(x-obj.x)-obj.w/2),dz=Math.max(0,Math.abs(z-obj.z)-obj.d/2);
  return Math.hypot(dx,dz);
 }
 function hasSpaceFor(id){return inventory.some(slot=>slot===null||slot.id===id&&slot.qty<(id==='wood'?10:Number.MAX_SAFE_INTEGER));}
 function availableActions(id){
+ if(id.startsWith('animal-')){
+  const animal=resolveObject(id);
+  if(!animal||!animal.alive)return [];
+  return [{id:'hunt',label:'Hunt with spear · +'+animal.meat+' raw meat',disabled:inventory[selectedSlot]?.id!=='spear'||freeCapacity(inventory,'rawMeat')<animal.meat}];
+ }
+ if(id==='cook')return [
+  {id:'takeSpear',label:'Take reusable spear',disabled:!hasSpaceFor('spear')},
+  {id:'cookMeat',label:'Cook 1 raw meat',disabled:itemQuantity('rawMeat')<1||!hasSpaceFor('cookedMeat')},
+  {id:'eatMeal',label:'Eat cooked meat',disabled:itemQuantity('cookedMeat')<1}];
  if(id.startsWith('tree-')){
   const tree=resolveObject(id);
   if(!tree||tree.chopped)return [];
@@ -772,7 +793,25 @@ function performAction(objectId,actionId){
  const allowed=availableActions(objectId).find(a=>a.id===actionId&&!a.disabled);
  if(!allowed)return {ok:false,message:'That action is not available.'};
  let message='';
- if(objectId.startsWith('tree-')){
+ if(objectId.startsWith('animal-')){
+   const animal=resolveObject(objectId);
+   if(!animal||!animal.alive)return {ok:false,message:'The animal has moved away.'};
+   if(inventory[selectedSlot]?.id!=='spear')return {ok:false,message:'Select your spear in the hotbar.'};
+   if(Math.hypot(camera[0]-animal.x,camera[2]-animal.z)>4.5)return {ok:false,message:'Move closer to hunt.'};
+   if(!addItem('rawMeat',animal.meat))return {ok:false,message:'Free some inventory space for meat.'};
+   animal.alive=false;animal.respawnAt=performance.now()+75000+Math.random()*40000;
+   nearby=null;updateNearby();message=animal.name+' hunted. Collected '+animal.meat+' raw meat.';
+ } else if(objectId==='cook'){
+   if(actionId==='takeSpear'){
+    if(!addItem('spear'))return {ok:false,message:'Inventory full.'};
+    message='Spear added. Select it in the hotbar to hunt animals.';
+   }else if(actionId==='cookMeat'){
+    if(itemQuantity('rawMeat')<1||!hasSpaceFor('cookedMeat'))return {ok:false,message:'Need raw meat and a free slot.'};
+    removeItem('rawMeat',1);addItem('cookedMeat',1);message='Cooked meat ready! Select it and tap Eat.';
+   }else if(actionId==='eatMeal'){
+    removeItem('cookedMeat',1);message='You enjoyed a warm cooked meal. 🍖';
+   }
+ } else if(objectId.startsWith('tree-')){
    const tree=resolveObject(objectId);
    if(!tree||tree.chopped||chopJob)return {ok:false,message:'Tree unavailable.'};
    if(inventory[selectedSlot]?.id!=='axe')return {ok:false,message:'Select an axe in your hotbar first.'};
@@ -829,6 +868,8 @@ function renderInteraction(){
  interact.style.display='block';iname.textContent=obj.name;
  document.getElementById('chopProgress').style.display=chopJob?.id===obj.id?'block':'none';
  if(obj.id==='board')iinfo.textContent='Read, post, like and comment';
+ else if(obj.id.startsWith('animal-'))iinfo.textContent=inventory[selectedSlot]?.id==='spear'?'Spear equipped · get close to hunt':'Select a spear in your hotbar to hunt';
+ else if(obj.id==='cook')iinfo.textContent='Take a spear, cook raw meat and enjoy food. No hunger meter yet.';
  else if(obj.id==='logstore')iinfo.textContent='Wood stored: '+slotCount(containerSlots.logs,'wood')+'/100 · tap Open inventory';
  else if(obj.id==='storage')iinfo.textContent='Chest: '+containerSlots.general.length+' slots · tap Open inventory';
  else if(obj.id.startsWith('tree-'))iinfo.textContent='Chop time: '+obj.duration.toFixed(1)+'s | Yield: '+obj.wood+' wood | '+(inventory[selectedSlot]?.id==='axe'?'Axe equipped':'Select an axe in hotbar')+(woodCapacity()<obj.wood?' | Inventory full':'');
@@ -857,6 +898,11 @@ function updateNearby(){
   if(tree.chopped)continue;
   const distance=Math.max(0,Math.hypot(camera[0]-tree.x,camera[2]-tree.z)-tree.r);
   if(distance<1.7&&distance<bestDist){best=tree.id;bestDist=distance;}
+ }
+ if(!fly&&!seatedAt)for(const animal of woodlandAnimals){
+  if(!animal.alive)continue;
+  const distance=Math.hypot(camera[0]-animal.x,camera[2]-animal.z);
+  if(distance<4.5&&distance<bestDist){best=animal.id;bestDist=distance;}
  }
  if(nearby!==best){nearby=best;renderInteraction();}
 }
@@ -1074,10 +1120,15 @@ pad.addEventListener('pointerdown',e=>{e.preventDefault();padPointer=e.pointerId
 function stopPad(e){if(e.pointerId===padPointer){padPointer=null;axis=[0,0];knob.style.transform='translate(0,0)';}}for(const ev of ['pointerup','pointercancel','lostpointercapture'])pad.addEventListener(ev,stopPad);
 canvas.addEventListener('pointerdown',e=>{drag=[e.pointerId,e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);});canvas.addEventListener('pointermove',e=>{if(!drag||drag[0]!==e.pointerId)return;yaw+=(e.clientX-drag[1])*.0055;pitch=Math.max(-1.15,Math.min(1.15,pitch-(e.clientY-drag[2])*.004));drag=[e.pointerId,e.clientX,e.clientY];});for(const ev of ['pointerup','pointercancel'])canvas.addEventListener(ev,()=>drag=null);
 document.getElementById('fly').addEventListener('click',e=>{fly=!fly;e.currentTarget.textContent=fly?'✦ Walking mode':'✦ Fly mode';diag.textContent=fly?'FLY MODE: collisions disabled':'WALK MODE: collisions enabled';updateNearby();});document.getElementById('reset').addEventListener('click',()=>{camera=[0,eyeHeight,16];yaw=0;pitch=-.13;updateNearby();});
+document.getElementById('eat').addEventListener('click',()=>{
+ const id=inventory[selectedSlot]?.id;
+ if(id!=='food'&&id!=='cookedMeat'){showToast('Select an apple or cooked meat.');return;}
+ if(removeFromSlot(selectedSlot,1))showToast(id==='food'?'You ate an apple. 🍎':'You ate a cooked meal. 🍖');
+});
 window.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code.startsWith('Arrow'))e.preventDefault();});window.addEventListener('keyup',e=>keys[e.code]=false);window.addEventListener('blur',()=>{axis=[0,0];keys={};knob.style.transform='translate(0,0)';});
 status.style.display='none';diag.textContent='Ready: '+count+' vertices';
 let frameNumber=0;function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=(walkingHeight(camera[0],camera[2])+(seatedAt?1.02:eyeHeight)-camera[1])*.14;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(w<768?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v2.0 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(w<768?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v2.1 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
