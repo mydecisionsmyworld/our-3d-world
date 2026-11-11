@@ -102,11 +102,11 @@
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v2.5</small></h1><p>Woodland wildlife · press E to interact on PC</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v2.6</small></h1><p>Woodland wildlife · fuelled fire · tent sleeping</p></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
 <div id="pad" aria-label="Movement joystick"><div id="knob"></div></div>
-<div id="buttons"><button id="eat" style="display:none;background:#45673c">🍖 Eat</button><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button></div><div id="hotbar" aria-label="Five inventory slots"></div><div id="dragGhost" aria-hidden="true"></div>
-<section id="interaction" aria-live="polite"><div class="interaction-top"><strong id="interactionName"></strong><button id="interactionClose" type="button" style="display:none" aria-label="Close interaction menu">✕ Close</button></div><p id="interactionInfo"></p><div id="cookerSlot" style="display:none;margin:8px 0;padding:9px;border:1px solid #a7b39a;border-radius:8px;background:#284b39"></div><div id="interactionActions"></div><div id="chopProgress"><div id="chopFill"></div></div></section><div id="toast" role="status"></div>
+<div id="buttons"><button id="eat" style="display:none;background:#45673c">F · Eat</button><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button></div><div id="hotbar" aria-label="Five inventory slots"></div><div id="dragGhost" aria-hidden="true"></div>
+<section id="interaction" aria-live="polite"><div class="interaction-top"><strong id="interactionName"></strong><button id="interactionClose" type="button" style="display:none" aria-label="Close interaction menu">✕ Close</button></div><p id="interactionInfo"></p><div id="cookerSlot" style="display:none;margin:8px 0;padding:9px;border:1px solid #a7b39a;border-radius:8px;background:#284b39"></div><div id="fireSlot" style="display:none;margin:8px 0;padding:9px;border:1px solid #a7b39a;border-radius:8px;background:#284b39"></div><div id="interactionActions"></div><div id="chopProgress"><div id="chopFill"></div></div></section><div id="toast" role="status"></div>
 <div id="storageOverlay" role="dialog" aria-modal="true" aria-label="Storage inventory">
  <div id="storageWindow">
   <div class="storage-head"><h2 id="storageTitle">Storage</h2><button type="button" id="storageClose" aria-label="Close storage">×</button></div>
@@ -624,7 +624,7 @@ try{
  }
 }catch(e){}
 function saveFelledTrees(){try{localStorage.setItem(treeSaveKey,JSON.stringify(forestTrees.filter(t=>t.chopped).map(t=>t.id)));}catch(e){}}
-const initialWorld={fireLit:true, tentSleeping:false, showerOn:false, storedFood:0, looseFood:3};
+const initialWorld={fireLit:false, tentSleeping:false, showerOn:false, storedFood:0, looseFood:3};
 let world={...initialWorld};
 try{const saved=JSON.parse(localStorage.getItem('woodland-camp-objects-v1')||'null');
   if(saved&&typeof saved==='object'){
@@ -634,6 +634,89 @@ try{const saved=JSON.parse(localStorage.getItem('woodland-camp-objects-v1')||'nu
   }
 }catch(e){}
 function saveWorld(){try{localStorage.setItem('woodland-camp-objects-v1',JSON.stringify(world));}catch(e){}}
+
+// The campfire consumes one log per ten minutes. Fuel inventory holds at most 10
+// RESERVED logs; the currently burning log is separate, and is lost on extinguishing.
+// Timestamp-based progress advances even when the page is closed.
+const fireSaveKey='woodland-camp-fire-fuel-v1',FIRE_LOG_MS=600000,FIRE_MAX_FUEL=10;
+let fireFuel={reserve:0,burningUntil:0,burningSince:0};
+try{
+ const saved=JSON.parse(localStorage.getItem(fireSaveKey)||'null');
+ if(saved&&Number.isSafeInteger(saved.reserve)&&Number.isFinite(saved.burningUntil)&&Number.isFinite(saved.burningSince)){
+  fireFuel.reserve=Math.max(0,Math.min(FIRE_MAX_FUEL,saved.reserve));
+  fireFuel.burningUntil=Math.max(0,saved.burningUntil);
+  fireFuel.burningSince=Math.max(0,saved.burningSince);
+ }
+}catch(e){}
+function saveFireFuel(){
+ try{localStorage.setItem(fireSaveKey,JSON.stringify(fireFuel));}catch(e){}
+}
+function updateFireFuel(){
+ const now=Date.now();
+ if(fireFuel.burningUntil>0&&now>=fireFuel.burningUntil){
+  const consumed=Math.floor((now-fireFuel.burningUntil)/FIRE_LOG_MS)+1;
+  const available=Math.min(consumed,fireFuel.reserve);
+  fireFuel.reserve-=available;
+  if(available===consumed){
+   const nextStart=fireFuel.burningUntil+(consumed-1)*FIRE_LOG_MS;
+   fireFuel.burningSince=nextStart;
+   fireFuel.burningUntil=nextStart+FIRE_LOG_MS;
+  }else{
+   fireFuel.burningSince=0;fireFuel.burningUntil=0;
+  }
+  saveFireFuel();
+ }
+ const lit=fireFuel.burningUntil>now;
+ if(world.fireLit!==lit){world.fireLit=lit;saveWorld();}
+ return lit;
+}
+updateFireFuel();
+function fuelCapacity(){updateFireFuel();return Math.max(0,FIRE_MAX_FUEL-fireFuel.reserve);}
+function addFireWood(quantity){
+ const count=Math.min(quantity,fuelCapacity(),itemQuantity('wood'));
+ if(count<1)return {ok:false,message:'Need wood in your inventory and room in the fire’s fuel slot.'};
+ if(!removeItem('wood',count))return {ok:false,message:'Could not move logs to the fire.'};
+ fireFuel.reserve+=count;saveFireFuel();
+ return {ok:true,message:'Added '+count+' wood to the fire. Reserved fuel: '+fireFuel.reserve+'/10.'};
+}
+function lightFueledFire(){
+ if(updateFireFuel())return {ok:false,message:'The fire is already burning.'};
+ if(fireFuel.reserve<1)return {ok:false,message:'Add at least 1 wood before lighting the fire.'};
+ fireFuel.reserve--;
+ fireFuel.burningSince=Date.now();
+ fireFuel.burningUntil=fireFuel.burningSince+FIRE_LOG_MS;
+ world.fireLit=true;saveWorld();saveFireFuel();
+ return {ok:true,message:'Fire lit! One log burns for 10 minutes.'};
+}
+function extinguishFueledFire(){
+ if(!updateFireFuel())return {ok:false,message:'The fire is already out.'};
+ fireFuel.burningSince=0;fireFuel.burningUntil=0;
+ world.fireLit=false;saveFireFuel();saveWorld();
+ return {ok:true,message:'Fire extinguished. Only the burning log was lost; '+fireFuel.reserve+' reserved logs remain.'};
+}
+function fireTimeLabel(ms){
+ const secs=Math.max(0,Math.ceil(ms/1000));
+ return Math.floor(secs/60)+':'+String(secs%60).padStart(2,'0');
+}
+function renderFireUI(){
+ const lit=updateFireFuel(),now=Date.now();
+ const remaining=lit?Math.max(0,fireFuel.burningUntil-now):0;
+ const progress=lit?Math.max(0,Math.min(100,Math.round(remaining/FIRE_LOG_MS*100))):0;
+ const total=lit?remaining+fireFuel.reserve*FIRE_LOG_MS:fireFuel.reserve*FIRE_LOG_MS;
+ const slot=document.getElementById('fireSlot');slot.style.display='block';
+ slot.innerHTML='<div style="display:flex;gap:12px;align-items:center">'+
+  '<div role="progressbar" aria-label="Current log burn time remaining" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+progress+'"'+
+  ' style="width:76px;height:76px;flex:none;border-radius:50%;display:grid;place-items:center;background:conic-gradient(#f0a45d '+progress+'%,#456252 '+progress+'%)">'+
+  '<div style="width:61px;height:61px;border-radius:50%;background:#284b39;display:grid;place-items:center;color:white;font-weight:800;font-size:16px">'+
+  (lit?fireTimeLabel(remaining):'OUT')+'</div></div>'+
+  '<div style="flex:1;font-size:12px;line-height:1.5"><strong>🔥 '+(lit?'Fire burning':'Fire unlit')+'</strong>'+
+  '<div>Current log: '+(lit?fireTimeLabel(remaining)+' left':'none')+'</div>'+
+  '<div>Total burn time: '+fireTimeLabel(total)+'</div></div></div>'+
+  '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:9px;padding:9px;border:1px solid #a7b39a;border-radius:7px">'+
+  '<span>🪵 Reserved wood slot</span><strong>'+fireFuel.reserve+' / 10</strong></div>'+
+  '<div style="font-size:11px;opacity:.9;margin-top:5px">Each log lasts 10 minutes. Extinguishing loses the active log only.</div>';
+}
+
 // Shared container data: wood rack holds 100 logs as 10 stacks of 10.
 // General storage accepts any currently defined inventory item.
 const containersKey='woodland-camp-containers-v2';
@@ -843,7 +926,10 @@ function renderHotbar(){
  if(dragState?.active)return;
  hotbar.replaceChildren();
  inventory.forEach((slot,i)=>hotbar.appendChild(slotMarkup(slot,i,'hotbar')));
- document.getElementById('eat').style.display=['food','cookedMeat'].includes(inventory[selectedSlot]?.id)?'block':'none';
+ const edible=['food','cookedMeat'].includes(inventory[selectedSlot]?.id);
+ const eatButton=document.getElementById('eat');
+ eatButton.style.display=edible?'block':'none';
+ eatButton.textContent=desktopMode()?'F · Eat':'🍖 Eat';
 }
 function renderStorageWindow(){
  if(!storageOpen)return;
@@ -956,6 +1042,7 @@ for(const root of [hotbar,storageSlots,storagePlayerSlots]){
 window.addEventListener('blur',()=>{if(dragState){if(dragState.timer)clearTimeout(dragState.timer);dragState=null;dragGhost.style.display='none';renderHotbar();renderStorageWindow();}});
 renderHotbar();saveInventory();saveContainers();
 let seatedAt=null;
+let sleepOutsidePosition=null;
 let chopJob=null;
 // One action dispatcher for future AI and human interactions.
 
@@ -1010,7 +1097,14 @@ function availableActions(id){
  }
  if(id==='board')return [{id:'openBoard',label:'Read / Write messages'}];
  if(id==='tent')return [{id:world.tentSleeping?'wake':'sleep',label:world.tentSleeping?'Finish sleeping':'Sleep'}];
- if(id==='fire')return [{id:world.fireLit?'extinguish':'light',label:world.fireLit?'Extinguish fire':'Light fire'}];
+ if(id==='fire'){
+  const lit=updateFireFuel(),amount=Math.min(itemQuantity('wood'),fuelCapacity());
+  return [
+   {id:'addFireWood',label:'Add '+amount+' wood to fuel slot',disabled:amount<1},
+   {id:'addFireOne',label:'Add 1 wood',disabled:amount<1},
+   {id:lit?'extinguish':'light',label:lit?'Extinguish fire (lose current log)':'Light fire (uses 1 wood)',disabled:!lit&&fireFuel.reserve<1}
+  ];
+ }
  if(id==='logstore'||id==='storage')return [{id:'open',label:'Open inventory'}];
  if(id==='shower')return [{id:world.showerOn?'showerOff':'showerOn',label:world.showerOn?'Turn shower off':'Turn shower on'}];
  if(id==='axe')return [{id:'takeAxe',label:'Take an axe',disabled:!hasSpaceFor('axe')}];
@@ -1049,11 +1143,27 @@ function performAction(objectId,actionId){
  } else if(objectId==='board'){
    openBoard();return {ok:true,message:'Board opened.'};
  } else if(objectId==='tent'){
-   world.tentSleeping=actionId==='sleep';
-   message=world.tentSleeping?'Sleeping in the tent.':'Finished sleeping.';
+   if(actionId==='sleep'){
+    sleepOutsidePosition=[camera[0],camera[2]];
+    world.tentSleeping=true;
+    seatedAt=null;
+    // The actual sleeping mat is at (-11,-8.36) after campsite scaling and shifting.
+    camera[0]=-11;camera[2]=-8.36;
+    pitch=-.18;
+    message='You went inside the tent and lay down on the sleeping mat.';
+   }else{
+    world.tentSleeping=false;
+    const outside=sleepOutsidePosition||[-11,-2.9];
+    camera[0]=outside[0];camera[2]=outside[1];camera[1]=walkingHeight(camera[0],camera[2])+eyeHeight;
+    sleepOutsidePosition=null;pitch=-.13;
+    message='You got up and stepped outside the tent.';
+   }
+   nearby='tent';
  } else if(objectId==='fire'){
-   world.fireLit=actionId==='light';
-   message=world.fireLit?'The campfire is lit.':'The campfire is out.';
+   if(actionId==='addFireWood')return addFireWood(Math.min(10,itemQuantity('wood')));
+   if(actionId==='addFireOne')return addFireWood(1);
+   if(actionId==='light')return lightFueledFire();
+   if(actionId==='extinguish')return extinguishFueledFire();
  } else if(objectId==='logstore'||objectId==='storage'){
    return showStorage(objectId==='logstore'?'logs':'general');
  } else if(objectId==='shower'){
@@ -1126,6 +1236,7 @@ function renderInteraction(){
  if(prompt){iactions.replaceChildren();return;}
  const cookerSlot=document.getElementById('cookerSlot');
  cookerSlot.style.display='none';cookerSlot.style.whiteSpace='pre-line';
+ document.getElementById('fireSlot').style.display='none';
  document.getElementById('chopProgress').style.display=chopJob?.id===obj.id?'block':'none';
  if(obj.id==='board')iinfo.textContent='Read, post, like and comment';
  else if(obj.id.startsWith('animal-'))iinfo.textContent=inventory[selectedSlot]?.id==='spear'?'Spear equipped · get close to hunt':'Select a spear in your hotbar to hunt';
@@ -1137,10 +1248,14 @@ function renderInteraction(){
  else if(obj.id==='storage')iinfo.textContent='Chest: '+containerSlots.general.length+' slots · tap Open inventory';
  else if(obj.id.startsWith('tree-'))iinfo.textContent='Chop time: '+obj.duration.toFixed(1)+'s | Yield: '+obj.wood+' wood | '+(inventory[selectedSlot]?.id==='axe'?'Axe equipped':'Select an axe in hotbar')+(woodCapacity()<obj.wood?' | Inventory full':'');
 
- else if(obj.id==='fire')iinfo.textContent=world.fireLit?'Currently burning':'Currently unlit';
+ else if(obj.id==='fire'){
+  iinfo.textContent='Fuel the fire with wood from your hotbar. One log lasts 10 minutes; the reserved wood is kept when you put the fire out.';
+  renderFireUI();
+ }
  else if(obj.id==='shower')iinfo.textContent=world.showerOn?'Water is running':'Water is turned off';
  else if(obj.id==='axe')iinfo.textContent='Reusable supply: the world axe never disappears';
  else if(obj.id.startsWith('seat')||obj.id.startsWith('bench'))iinfo.textContent=seatedAt===obj.id?'Currently sitting':'Sit here';
+ else if(obj.id==='tent')iinfo.textContent=world.tentSleeping?'Inside the tent · press Wake to step outside':'Sleep inside the tent on the sleeping mat';
  else iinfo.textContent=world.tentSleeping?'Sleeping session active':'Sleeping area ready';
  iactions.replaceChildren();
  for(const action of availableActions(obj.id)){
@@ -1159,6 +1274,10 @@ function renderInteraction(){
  }
 }
 function updateNearby(){
+ if(world.tentSleeping){
+  if(nearby!=='tent'){nearby='tent';renderInteraction();}
+  return;
+ }
  if(desktopMode()&&desktopMenuOpen)return;
  if(chopJob){if(nearby!==chopJob.id){nearby=chopJob.id;renderInteraction();}return;}
  let best=null,bestDist=Infinity;
@@ -1400,8 +1519,8 @@ function desktopGuide(){
  guide.textContent=finePointer.matches?
   (desktopMenuOpen?'Interaction open · click an action\nClose or press E / Esc to resume looking':
    document.pointerLockElement===canvas?
-   'WASD: move · Mouse: look · E: open nearby menu\n1–5: hotbar · F: fly · Esc: release mouse':
-   'Click world to capture mouse\nWASD: move · E: open nearby menu'):
+   'WASD: move · Mouse: look · E: interact\nF: eat · G: fly · 1–5: hotbar · Esc: release':
+   'Click world to capture mouse\nWASD: move · E: interact · F: eat · G: fly'):
   'Drag to look around\nMove with the joystick';
 }
 desktopGuide();
@@ -1429,11 +1548,12 @@ canvas.addEventListener('pointermove',e=>{
 });
 for(const ev of ['pointerup','pointercancel'])canvas.addEventListener(ev,()=>drag=null);
 document.getElementById('fly').addEventListener('click',e=>{fly=!fly;e.currentTarget.textContent=fly?'✦ Walking mode':'✦ Fly mode';diag.textContent=fly?'FLY MODE: collisions disabled':'WALK MODE: collisions enabled';updateNearby();});document.getElementById('reset').addEventListener('click',()=>{camera=[0,eyeHeight,16];yaw=0;pitch=-.13;updateNearby();});
-document.getElementById('eat').addEventListener('click',()=>{
+function eatSelectedFood(){
  const id=inventory[selectedSlot]?.id;
- if(id!=='food'&&id!=='cookedMeat'){showToast('Select an apple or cooked meat.');return;}
+ if(id!=='food'&&id!=='cookedMeat')return;
  if(removeFromSlot(selectedSlot,1))showToast(id==='food'?'You ate an apple. 🍎':'You ate a cooked meal. 🍖');
-});
+}
+document.getElementById('eat').addEventListener('click',eatSelectedFood);
 // Keyboard shortcuts deliberately ignore text fields and modal windows.
 window.addEventListener('keydown',e=>{
  const tag=document.activeElement?.tagName;
@@ -1466,7 +1586,10 @@ window.addEventListener('keydown',e=>{
   const i=Number(e.code.slice(-1))-1;
   if(i>=0&&i<5){selectedSlot=i;renderHotbar();updateNearby();renderInteraction();}
  }
- if(e.code==='KeyF'){document.getElementById('fly').click();e.preventDefault();}
+ if(e.code==='KeyF'){
+  e.preventDefault();if(!e.repeat)eatSelectedFood();return;
+ }
+ if(e.code==='KeyG'){document.getElementById('fly').click();e.preventDefault();}
  // Preserve the original quick interaction for non-desktop keyboard users.
  if(e.code==='KeyE'&&nearby&&!fly){
   const action=availableActions(nearby).find(a=>!a.disabled);
@@ -1482,8 +1605,8 @@ window.addEventListener('keyup',e=>{keys[e.code]=false;});
 window.addEventListener('blur',()=>{axis=[0,0];keys={};knob.style.transform='translate(0,0)';});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){axis=[0,0];keys={};last=performance.now();}});
 status.style.display='none';diag.textContent='Ready: '+count+' vertices';
-let frameNumber=0;function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}if(desktopMenuOpen||boardIsOpen||storageOpen){forward=0;right=0;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=(walkingHeight(camera[0],camera[2])+(seatedAt?1.02:eyeHeight)-camera[1])*.14;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&nearby==='cook'&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v2.5 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let frameNumber=0;function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}if(desktopMenuOpen||boardIsOpen||storageOpen){forward=0;right=0;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=world.tentSleeping||seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=(walkingHeight(camera[0],camera[2])+(world.tentSleeping?.85:seatedAt?1.02:eyeHeight)-camera[1])*.14;}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v2.6 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
