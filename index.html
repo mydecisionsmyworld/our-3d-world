@@ -69,11 +69,11 @@
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v2.1</small></h1><p>Woodland wildlife · hunting · camp cooking</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v2.2</small></h1><p>Woodland wildlife · unattended cooking · one-slot storage</p></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
 <div id="pad" aria-label="Movement joystick"><div id="knob"></div></div>
 <div id="buttons"><button id="eat" style="display:none;background:#45673c">🍖 Eat</button><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button></div><div id="hotbar" aria-label="Five inventory slots"></div><div id="dragGhost" aria-hidden="true"></div>
-<section id="interaction" aria-live="polite"><strong id="interactionName"></strong><p id="interactionInfo"></p><div id="interactionActions"></div><div id="chopProgress"><div id="chopFill"></div></div></section><div id="toast" role="status"></div>
+<section id="interaction" aria-live="polite"><strong id="interactionName"></strong><p id="interactionInfo"></p><div id="cookerSlot" style="display:none;margin:8px 0;padding:9px;border:1px solid #a7b39a;border-radius:8px;background:#284b39"></div><div id="interactionActions"></div><div id="chopProgress"><div id="chopFill"></div></div></section><div id="toast" role="status"></div>
 <div id="storageOverlay" role="dialog" aria-modal="true" aria-label="Storage inventory">
  <div id="storageWindow">
   <div class="storage-head"><h2 id="storageTitle">Storage</h2><button type="button" id="storageClose" aria-label="Close storage">×</button></div>
@@ -686,7 +686,7 @@ function saveContainers(){
 function itemQuantity(id){return slotCount(inventory,id);}
 function woodCapacity(){return freeCapacity(inventory,'wood');}
 function hasSpaceFor(id){return freeCapacity(inventory,id)>0;}
-function canCookOne(){return itemQuantity('rawMeat')>0&&(hasSpaceFor('cookedMeat')||inventory.some(slot=>slot?.id==='rawMeat'&&slot.qty===1));}
+// Cooking does not require an empty player slot: cooked meat waits at the station.
 function addItem(id,quantity=1){
  if(!validItems.includes(id)||!Number.isSafeInteger(quantity)||quantity<1||freeCapacity(inventory,id)<quantity)return false;
  if(insertQuantity(inventory,id,quantity)!==0)return false;
@@ -708,6 +708,47 @@ function removeItem(id,quantity=1){
 function inventoryUpdated(){
  saveInventory();renderHotbar();if(storageOpen)renderStorageWindow();
 }
+// Persistent cooking queue: a single cooking position and ONE output slot (stack of 10).
+// Uses wall-clock time so cooking completes while wandering or after a page reload.
+const cookerSaveKey='woodland-camp-cooker-v1',COOK_TIME_MS=14000;
+let cooker={readyAt:0,output:0};
+try{
+ const saved=JSON.parse(localStorage.getItem(cookerSaveKey)||'null');
+ if(saved&&Number.isFinite(saved.readyAt)&&Number.isSafeInteger(saved.output)){
+  cooker.readyAt=saved.readyAt>0?saved.readyAt:0;
+  cooker.output=Math.max(0,Math.min(10,saved.output));
+ }
+}catch(e){}
+function saveCooker(){try{localStorage.setItem(cookerSaveKey,JSON.stringify(cooker));}catch(e){}}
+function updateCooker(){
+ if(cooker.readyAt&&Date.now()>=cooker.readyAt){
+  cooker.readyAt=0;
+  cooker.output=Math.min(10,cooker.output+1);
+  saveCooker();
+ }
+}
+function canStartCooking(){
+ updateCooker();
+ return cooker.readyAt===0&&cooker.output<10&&itemQuantity('rawMeat')>=1;
+}
+function startCooking(){
+ if(!canStartCooking())return {ok:false,message:cooker.readyAt?'A piece is already cooking.':'Need raw meat and room in the cooking station.'};
+ // The input is consumed only after the cooking slot is available.
+ if(!removeItem('rawMeat',1))return {ok:false,message:'No raw meat in your inventory.'};
+ cooker.readyAt=Date.now()+COOK_TIME_MS;
+ saveCooker();
+ return {ok:true,message:'One piece is cooking. Return in 14 seconds to collect it.'};
+}
+function takeCookedMeat(){
+ updateCooker();
+ if(cooker.output<1)return {ok:false,message:'No cooked meat ready yet.'};
+ const available=freeCapacity(inventory,'cookedMeat'),amount=Math.min(available,cooker.output);
+ if(amount<1)return {ok:false,message:'Your inventory is full. Free a slot before collecting.'};
+ if(!addItem('cookedMeat',amount))return {ok:false,message:'Unable to collect cooked meat.'};
+ cooker.output-=amount;saveCooker();
+ return {ok:true,message:'Collected '+amount+' cooked meat.'};
+}
+
 function containerCapacity(name){return containerSlots[name].length*MAX_STACK;}
 const hotbar=document.getElementById('hotbar'),dragGhost=document.getElementById('dragGhost');
 const storageOverlay=document.getElementById('storageOverlay'),
@@ -886,10 +927,14 @@ function availableActions(id){
   if(!animal||!animal.alive)return [];
   return [{id:'hunt',label:'Hunt with spear · +'+animal.meat+' raw meat',disabled:inventory[selectedSlot]?.id!=='spear'||freeCapacity(inventory,'rawMeat')<animal.meat}];
  }
- if(id==='cook')return [
-  {id:'takeSpear',label:'Take reusable spear',disabled:!hasSpaceFor('spear')},
-  {id:'cookMeat',label:'Cook 1 raw meat',disabled:!canCookOne()},
-  {id:'eatMeal',label:'Eat cooked meat',disabled:itemQuantity('cookedMeat')<1}];
+ if(id==='cook'){
+  updateCooker();
+  return [
+   {id:'takeSpear',label:'Take reusable spear',disabled:!hasSpaceFor('spear')},
+   {id:'cookMeat',label:cooker.readyAt?'Cooking…':'Start cooking 1 raw meat',disabled:!canStartCooking()},
+   {id:'collectMeat',label:'Collect cooked meat'+(cooker.output?' ('+cooker.output+')':''),disabled:cooker.output<1||freeCapacity(inventory,'cookedMeat')<1}
+  ];
+ }
  if(id.startsWith('tree-')){
   const tree=resolveObject(id);
   if(!tree||tree.chopped)return [];
@@ -923,10 +968,9 @@ function performAction(objectId,actionId){
     if(!addItem('spear'))return {ok:false,message:'Inventory full.'};
     message='Spear added. Select it in the hotbar to hunt animals.';
    }else if(actionId==='cookMeat'){
-    if(!canCookOne())return {ok:false,message:'Need raw meat and a free slot.'};
-    removeItem('rawMeat',1);if(!addItem('cookedMeat',1))return {ok:false,message:'Unable to store cooked meat.'};message='Cooked meat ready! Select it and tap Eat.';
-   }else if(actionId==='eatMeal'){
-    removeItem('cookedMeat',1);message='You enjoyed a warm cooked meal. 🍖';
+    return startCooking();
+   }else if(actionId==='collectMeat'){
+    return takeCookedMeat();
    }
  } else if(objectId.startsWith('tree-')){
    const tree=resolveObject(objectId);
@@ -983,10 +1027,21 @@ function renderInteraction(){
  const obj=resolveObject(nearby);
  if(!obj){interact.style.display='none';return;}
  interact.style.display='block';iname.textContent=obj.name;
+ const cookerSlot=document.getElementById('cookerSlot');
+ cookerSlot.style.display='none';cookerSlot.style.whiteSpace='pre-line';
  document.getElementById('chopProgress').style.display=chopJob?.id===obj.id?'block':'none';
  if(obj.id==='board')iinfo.textContent='Read, post, like and comment';
  else if(obj.id.startsWith('animal-'))iinfo.textContent=inventory[selectedSlot]?.id==='spear'?'Spear equipped · get close to hunt':'Select a spear in your hotbar to hunt';
- else if(obj.id==='cook')iinfo.textContent='Take a spear, cook raw meat and enjoy food. No hunger meter yet.';
+ else if(obj.id==='cook'){
+  updateCooker();
+  iinfo.textContent='Put 1 raw meat on the grill, leave it cooking and collect it later. The cooked meat stays here until you take it.';
+  const slot=document.getElementById('cookerSlot');
+  slot.style.display='block';
+  const remaining=Math.max(0,Math.ceil((cooker.readyAt-Date.now())/1000));
+  slot.textContent='🍖 COOKING STATION · ONE OUTPUT SLOT\n'+
+   (cooker.output?'[ 🍖 × '+cooker.output+' / 10 ] Cooked meat ready':'[ Empty output slot ]')+
+   (cooker.readyAt?' · 🔥 Cooking ('+remaining+'s remaining)':' · Grill available');
+ }
  else if(obj.id==='logstore')iinfo.textContent='Wood stored: '+slotCount(containerSlots.logs,'wood')+'/100 · tap Open inventory';
  else if(obj.id==='storage')iinfo.textContent='Chest: '+containerSlots.general.length+' slots · tap Open inventory';
  else if(obj.id.startsWith('tree-'))iinfo.textContent='Chop time: '+obj.duration.toFixed(1)+'s | Yield: '+obj.wood+' wood | '+(inventory[selectedSlot]?.id==='axe'?'Axe equipped':'Select an axe in hotbar')+(woodCapacity()<obj.wood?' | Inventory full':'');
@@ -1245,7 +1300,7 @@ document.getElementById('eat').addEventListener('click',()=>{
 window.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code.startsWith('Arrow'))e.preventDefault();});window.addEventListener('keyup',e=>keys[e.code]=false);window.addEventListener('blur',()=>{axis=[0,0];keys={};knob.style.transform='translate(0,0)';});
 status.style.display='none';diag.textContent='Ready: '+count+' vertices';
 let frameNumber=0;function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=(walkingHeight(camera[0],camera[2])+(seatedAt?1.02:eyeHeight)-camera[1])*.14;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(w<768?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v2.1 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(w<768?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&nearby==='cook')renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v2.2 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
