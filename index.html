@@ -450,6 +450,123 @@ let count=positions.length/3,buf=new Float32Array(count*9);for(let i=0;i<count;i
 let buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,buf,gl.DYNAMIC_DRAW);for(const [name,offset] of [['p',0],['c',3],['n',6]]){let loc=gl.getAttribLocation(prog,name);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,3,gl.FLOAT,false,36,offset*4);}
 gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.clearColor(.68,.81,.89,1);
 const projLoc=gl.getUniformLocation(prog,'proj'),viewLoc=gl.getUniformLocation(prog,'view');
+// Woodland wildlife uses its own tiny GPU buffer. Movement happens in the
+// vertex shader so deer, rabbits and boar wander without rebuilding the world.
+const animalShiftLoc=gl.getUniformLocation(prog,'animalShift'),
+animalHeadingLoc=gl.getUniformLocation(prog,'animalHeading');
+const worldPositions=positions,worldColors=colors,worldNormals=normals;
+positions=[];colors=[];normals=[];
+const animalShapes={};
+function animalShape(species,draw){
+ const start=positions.length/3;draw();animalShapes[species]={start,count:positions.length/3-start};
+}
+animalShape('rabbit',()=>{
+ const fur=[.63,.57,.44],light=[.78,.73,.62];
+ box(0,.14,0,.64,.46,.96,fur);box(0,.36,-.4,.47,.4,.46,fur);
+ box(-.14,.67,-.47,.12,.58,.17,light);box(.14,.67,-.47,.12,.58,.17,light);
+ box(0,.27,.52,.28,.29,.23,light);
+ for(const x of [-.22,.22]){box(x,.05,-.31,.18,.24,.25,fur);box(x,.05,.38,.18,.22,.29,fur);}
+ box(-.255,.55,-.57,.07,.07,.07,[.12,.12,.1]);box(.255,.55,-.57,.07,.07,.07,[.12,.12,.1]);
+});
+animalShape('deer',()=>{
+ const fur=[.58,.35,.20],dark=[.41,.26,.15],cream=[.76,.63,.46];
+ box(0,1.08,0,1.02,.72,1.58,fur);box(0,1.41,-.69,.40,.75,.43,fur);
+ box(0,1.85,-.9,.46,.42,.67,fur);
+ box(0,1.83,-1.26,.34,.20,.23,cream);
+ for(const x of [-.32,.32]){box(x,.04,-.52,.19,1.04,.23,dark);box(x,.04,.54,.20,1.04,.24,dark);}
+ for(const x of [-.28,.28]){box(x,2.15,-.98,.16,.48,.14,cream);box(x,2.39,-.97,.37,.10,.1,cream);}
+ box(0,1.62,.86,.19,.19,.39,cream);
+});
+animalShape('boar',()=>{
+ const brown=[.37,.31,.26],snout=[.48,.38,.34];
+ box(0,.32,0,1.05,.83,1.5,brown);box(0,.63,-.83,.86,.62,.58,brown);
+ box(0,.48,-1.18,.53,.28,.32,snout);
+ for(const x of [-.36,.36]){box(x,.035,-.48,.25,.38,.26,brown);box(x,.035,.52,.25,.40,.28,brown);}
+ box(-.34,1.19,-.79,.23,.27,.16,brown);box(.34,1.19,-.79,.23,.27,.16,brown);
+ box(-.24,.81,-1.13,.075,.08,.07,[.12,.12,.11]);
+ box(.24,.81,-1.13,.075,.08,.07,[.12,.12,.11]);
+});
+const animalData=new Float32Array(positions.length*3);
+for(let i=0;i<positions.length/3;i++)for(let j=0;j<3;j++){
+ animalData[i*9+j]=positions[i*3+j];
+ animalData[i*9+3+j]=colors[i*3+j];
+ animalData[i*9+6+j]=normals[i*3+j];
+}
+positions=worldPositions;colors=worldColors;normals=worldNormals;
+const animalBuffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,animalBuffer);
+gl.bufferData(gl.ARRAY_BUFFER,animalData,gl.STATIC_DRAW);
+gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+function animalLocationClear(x,z){
+ if(Math.hypot(x,z)<26||Math.hypot(x+55,z+42)<21||Math.abs(x)>82||Math.abs(z)>82)return false;
+ if(ground(x,z)>17)return false;
+ return !blocked(x,z);
+}
+function findAnimalLocation(preferredX,preferredZ){
+ if(animalLocationClear(preferredX,preferredZ))return [preferredX,preferredZ];
+ for(let i=0;i<80;i++){
+  const angle=Math.random()*Math.PI*2,d=30+Math.random()*42;
+  const x=Math.cos(angle)*d,z=Math.sin(angle)*d;
+  if(animalLocationClear(x,z))return [x,z];
+ }
+ return [42,32];
+}
+const woodlandAnimals=[];
+const animalKinds=['rabbit','deer','rabbit','boar','rabbit','deer','rabbit','boar','rabbit','deer','rabbit','boar'];
+for(let i=0;i<animalKinds.length;i++){
+ const kind=animalKinds[i],angle=i*Math.PI*2/animalKinds.length+.13,
+ radius=36+(i%3)*9,[x,z]=findAnimalLocation(Math.cos(angle)*radius,Math.sin(angle)*radius);
+ woodlandAnimals.push({id:'animal-'+i,kind,name:kind==='boar'?'Wild boar':kind==='deer'?'Woodland deer':'Wild rabbit',
+  x,z,heading:Math.random()*Math.PI*2,turnIn:1+Math.random()*3,meat:kind==='deer'?3:kind==='boar'?2:1,
+  speed:kind==='rabbit'?1.0:kind==='deer'?.82:.66,alive:true,respawnAt:0});
+}
+function advanceWoodlandAnimals(dt,now){
+ for(const a of woodlandAnimals){
+  if(!a.alive){
+   if(now>=a.respawnAt){
+    const point=findAnimalLocation(a.x+Math.random()*12-6,a.z+Math.random()*12-6);
+    a.x=point[0];a.z=point[1];a.alive=true;a.turnIn=0;
+   }
+   continue;
+  }
+  const dx=a.x-camera[0],dz=a.z-camera[2],distance=Math.hypot(dx,dz);
+  a.turnIn-=dt;
+  const fleeing=distance<8&&!fly;
+  if(fleeing){
+   const target=Math.atan2(-dx,-dz)+Math.PI;
+   // Convert escape direction into model heading: model forward points to -Z.
+   const desired=Math.atan2(-dx,-dz);
+   const normal=Math.atan2(Math.sin(desired-a.heading),Math.cos(desired-a.heading));
+   a.heading+=normal*Math.min(1,dt*3.2);
+  }else if(a.turnIn<=0){
+   a.heading+=(Math.random()-.5)*1.7;a.turnIn=1+Math.random()*4;
+  }
+  const movement=a.speed*(fleeing?2.2:.55)*dt;
+  const nx=a.x-Math.sin(a.heading)*movement,nz=a.z-Math.cos(a.heading)*movement;
+  if(animalLocationClear(nx,nz)){a.x=nx;a.z=nz;}
+  else {a.heading+=1.1+Math.random()*1.6;a.turnIn=1.5;}
+ }
+}
+function drawWoodlandAnimals(now){
+ gl.bindBuffer(gl.ARRAY_BUFFER,animalBuffer);
+ for(const [name,offset] of [['p',0],['c',3],['n',6]]){
+  const loc=gl.getAttribLocation(prog,name);
+  gl.vertexAttribPointer(loc,3,gl.FLOAT,false,36,offset*4);
+ }
+ for(const a of woodlandAnimals)if(a.alive){
+  const bodyBob=Math.sin(now*.0026+a.x)*.035;
+  gl.uniform3f(animalShiftLoc,a.x,ground(a.x,a.z)+bodyBob,a.z);
+  gl.uniform1f(animalHeadingLoc,a.heading);
+  const mesh=animalShapes[a.kind];
+  gl.drawArrays(gl.TRIANGLES,mesh.start,mesh.count);
+ }
+ gl.uniform3f(animalShiftLoc,0,0,0);gl.uniform1f(animalHeadingLoc,0);
+ gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+ for(const [name,offset] of [['p',0],['c',3],['n',6]]){
+  const loc=gl.getAttribLocation(prog,name);
+  gl.vertexAttribPointer(loc,3,gl.FLOAT,false,36,offset*4);
+ }
+}
+
 function perspective(fov,aspect,near,far){let f=1/Math.tan(fov/2),nf=1/(near-far);return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)*nf,-1,0,0,2*far*near*nf,0]);}
 function view(eye,yaw,pitch){let cp=Math.cos(pitch),z=[-Math.sin(yaw)*cp,-Math.sin(pitch),Math.cos(yaw)*cp],x=[z[2],0,-z[0]],l=Math.hypot(...x);x=x.map(q=>q/l);let y=[z[1]*x[2]-z[2]*x[1],z[2]*x[0]-z[0]*x[2],z[0]*x[1]-z[1]*x[0]];return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-x.reduce((s,q,i)=>s+q*eye[i],0),-y.reduce((s,q,i)=>s+q*eye[i],0),-z.reduce((s,q,i)=>s+q*eye[i],0),1]);}
 // World-object actions do not alter an actor's needs, health, hunger, or energy.
@@ -1128,7 +1245,7 @@ document.getElementById('eat').addEventListener('click',()=>{
 window.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code.startsWith('Arrow'))e.preventDefault();});window.addEventListener('keyup',e=>keys[e.code]=false);window.addEventListener('blur',()=>{axis=[0,0];keys={};knob.style.transform='translate(0,0)';});
 status.style.display='none';diag.textContent='Ready: '+count+' vertices';
 let frameNumber=0;function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=(walkingHeight(camera[0],camera[2])+(seatedAt?1.02:eyeHeight)-camera[1])*.14;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(w<768?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v2.1 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(w<768?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v2.1 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
