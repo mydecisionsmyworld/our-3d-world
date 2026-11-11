@@ -66,7 +66,7 @@
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:10px">v1.3</small></h1><p>A home in the forest · community message board</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:10px">v1.4</small></h1><p>A home in the forest · shared message board</p></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
 <div id="pad" aria-label="Movement joystick"><div id="knob"></div></div>
 <div id="buttons"><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button></div><div id="hotbar" aria-label="Five inventory slots"></div><div id="dragGhost" aria-hidden="true"></div>
@@ -702,7 +702,7 @@ function updateNearby(){
 
 // Message-board transport. Configure a deployed Worker URL to enable shared messages.
 // Blank means local preview only; its posts cannot be read on another device.
-const BOARD_API_URL='';
+const BOARD_API_URL='https://woodland-camp-board.drew-matthews2001.workers.dev';
 const boardLocalKey='woodland-camp-board-preview-v1';
 const boardIdentityKey='woodland-board-visitor-v1';
 const boardName=document.getElementById('boardName');
