@@ -1506,7 +1506,7 @@ document.getElementById('boardOwnerSave').addEventListener('click',async()=>{
  }
 });
 
-let camera=[0,eyeHeight,16],yaw=0,pitch=-.13,fly=false,axis=[0,0],drag=null,keys={},last=performance.now();
+let camera=[world.tentSleeping?-11:0,world.tentSleeping?walkingHeight(-11,-8.36)+.85:eyeHeight,world.tentSleeping?-8.36:16],yaw=0,pitch=-.13,fly=false,axis=[0,0],drag=null,keys={},last=performance.now();
 const pad=document.getElementById('pad'),knob=document.getElementById('knob');let padPointer=null;
 function movePad(e){let r=pad.getBoundingClientRect(),dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2),max=r.width*.34,len=Math.hypot(dx,dy);if(len>max){dx*=max/len;dy*=max/len;}axis=[dx/max,-dy/max];knob.style.transform='translate('+dx+'px,'+dy+'px)';}
 pad.addEventListener('pointerdown',e=>{e.preventDefault();padPointer=e.pointerId;pad.setPointerCapture(e.pointerId);movePad(e);});pad.addEventListener('pointermove',e=>{if(e.pointerId===padPointer)movePad(e);});
@@ -1547,7 +1547,7 @@ canvas.addEventListener('pointermove',e=>{
  drag=[e.pointerId,e.clientX,e.clientY];
 });
 for(const ev of ['pointerup','pointercancel'])canvas.addEventListener(ev,()=>drag=null);
-document.getElementById('fly').addEventListener('click',e=>{fly=!fly;e.currentTarget.textContent=fly?'✦ Walking mode':'✦ Fly mode';diag.textContent=fly?'FLY MODE: collisions disabled':'WALK MODE: collisions enabled';updateNearby();});document.getElementById('reset').addEventListener('click',()=>{camera=[0,eyeHeight,16];yaw=0;pitch=-.13;updateNearby();});
+document.getElementById('fly').addEventListener('click',e=>{if(world.tentSleeping){showToast('Wake up before flying.');return;}fly=!fly;e.currentTarget.textContent=fly?'✦ Walking mode':'✦ Fly mode';diag.textContent=fly?'FLY MODE: collisions disabled':'WALK MODE: collisions enabled';updateNearby();});document.getElementById('reset').addEventListener('click',()=>{world.tentSleeping=false;sleepOutsidePosition=null;saveWorld();camera=[0,eyeHeight,16];yaw=0;pitch=-.13;updateNearby();});
 function eatSelectedFood(){
  const id=inventory[selectedSlot]?.id;
  if(id!=='food'&&id!=='cookedMeat')return;
