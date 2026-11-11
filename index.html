@@ -842,6 +842,7 @@ function renderBoardMessages(){
   send.addEventListener('click',()=>withBoardAction(async()=>{
     const text=input.value.trim();
     if(!text||wordCount(text)>300)throw Error('Comments must contain 1–300 words.');
+    if(!sharedBoard&&msg.comments.length>=50)throw Error('This message has reached its comment limit.');
     if(sharedBoard)await boardApi('/api/messages/'+encodeURIComponent(msg.id)+'/comments','POST',{name:boardSavedName(),text});
     else msg.comments.push({id:crypto.randomUUID(),name:boardSavedName(),text,createdAt:Date.now()});
   }));
@@ -878,7 +879,7 @@ document.getElementById('boardOwnerSave').addEventListener('click',()=>{
  boardOwnerKey=document.getElementById('boardOwnerKey').value.trim();
  document.getElementById('boardOwnerKey').value='';
  setBoardStatus(sharedBoard?'Owner key set for this page. Server will verify it on privileged actions.':'Owner key has no special effect in local preview.');
- renderBoardMessages();
+ if(sharedBoard)refreshBoard();else renderBoardMessages();
 });
 
 let camera=[0,eyeHeight,14],yaw=0,pitch=-.13,fly=false,axis=[0,0],drag=null,keys={},last=performance.now();
