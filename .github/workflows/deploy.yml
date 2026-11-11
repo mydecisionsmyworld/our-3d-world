@@ -1,0 +1,60 @@
+name: Deploy Woodland Camp
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: woodland-camp-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Validate and deploy game
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Verify game HTML and JavaScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s index.html
+          node <<'NODE'
+          const fs = require('fs');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const match = html.match(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/i);
+          if (!match) throw new Error('No inline game script found');
+          new Function(match[1]);
+          if (!html.includes('</html>')) throw new Error('HTML document is incomplete');
+          console.log('Woodland Camp HTML and JavaScript check passed.');
+          NODE
+
+      - name: Package game
+        shell: bash
+        run: |
+          mkdir -p _site
+          cp index.html _site/index.html
+          touch _site/.nojekyll
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
