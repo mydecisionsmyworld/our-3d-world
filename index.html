@@ -1345,9 +1345,9 @@ const guide=document.getElementById('guide');
 function desktopGuide(){
  guide.textContent=finePointer.matches?
   (document.pointerLockElement===canvas?
-   'WASD / arrows: move · Mouse: look\\nE: interact · 1–5: inventory · F: fly\\nEsc: release mouse · click world to resume':
-   'Click the woodland to capture your mouse\\nWASD / arrows: move · E: interact\\n1–5: inventory · F: fly · Esc: release'):
-  'Drag to look around\\nMove with the joystick';
+   'WASD / arrows: move · Mouse: look\nE: interact · 1–5: inventory · F: fly\nEsc: release mouse · click world to resume':
+   'Click the woodland to capture your mouse\nWASD / arrows: move · E: interact\n1–5: inventory · F: fly · Esc: release'):
+  'Drag to look around\nMove with the joystick';
 }
 desktopGuide();
 document.addEventListener('pointerlockchange',()=>{drag=null;desktopGuide();});
