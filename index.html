@@ -1941,6 +1941,13 @@ function applyWeather(date){
  currentConditions.temp=read('temperature_2m',null);
  currentConditions.wind=read('wind_speed_10m',0);
  currentConditions.source='forecast';
+ const recent=Date.now()-weatherUpdatedAt<960000?weatherForecast.current:null;
+ if(recent){
+  for(const [key,target] of [['cloud_cover','cloud'],['precipitation','rain'],['snowfall','snow'],['weather_code','code'],['temperature_2m','temp'],['wind_speed_10m','wind']]){
+   if(Number.isFinite(recent[key]))currentConditions[target]=recent[key];
+  }
+  currentConditions.source='current';
+ }
 }
 function weatherSummary(date){
  const degree=Number.isFinite(currentConditions.temp)?Math.round(currentConditions.temp)+'°C · ':'';
@@ -1963,7 +1970,7 @@ async function fetchBournemouthWeather(){
  if(weatherPending)return;
  weatherPending=true;weatherLastAttempt=Date.now();
  // Hourly forecasts use Unix timestamps to avoid GMT/BST ambiguity.
- const url='https://api.open-meteo.com/v1/forecast?latitude=50.7192&longitude=-1.8808&hourly=temperature_2m,precipitation,snowfall,weather_code,cloud_cover,wind_speed_10m&forecast_days=4&past_days=1&timezone=Europe%2FLondon&timeformat=unixtime';
+ const url='https://api.open-meteo.com/v1/forecast?latitude=50.7192&longitude=-1.8808&hourly=temperature_2m,precipitation,snowfall,weather_code,cloud_cover,wind_speed_10m&current=temperature_2m,precipitation,snowfall,weather_code,cloud_cover,wind_speed_10m&forecast_days=4&past_days=1&timezone=Europe%2FLondon&timeformat=unixtime';
  try{
   const response=await fetch(url,{cache:'no-store'});
   if(!response.ok)throw Error('Weather HTTP '+response.status);
