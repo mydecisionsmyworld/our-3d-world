@@ -159,7 +159,7 @@ body.build-active #buttons{bottom:auto;top:max(49px,calc(env(safe-area-inset-top
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v4.2</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v4.3</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
 <div id="sunMoon" aria-hidden="true"></div><canvas id="weatherFX" aria-hidden="true"></canvas>
 <div id="worldWeather" aria-live="off"><div class="weatherClockRow"><span id="gmtClock" class="weatherClock">--:--:-- GMT</span><span id="currentWeatherIcon" class="weatherIcon" role="img" aria-label="Weather loading" title="Weather loading">⏳</span></div><div id="weatherDate" class="weatherDetail">Bournemouth · synchronising</div><div id="weatherNow" class="weatherDetail">Connecting to weather forecast…</div><div id="weatherTomorrow" class="weatherDetail"></div><div class="weatherDetail"><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" style="pointer-events:auto;color:inherit;text-decoration:underline">Weather: Open-Meteo</a></div></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
@@ -178,10 +178,12 @@ body.build-active #buttons{bottom:auto;top:max(49px,calc(env(safe-area-inset-top
       <button type="button" data-build="west" aria-label="Move one metre west">◀</button><button type="button" data-build="south" aria-label="Move one metre south">▼</button><button type="button" data-build="east" aria-label="Move one metre east">▶</button>
     </div>
     <div class="buildRow"><button type="button" data-build="rotate-left" title="Rotate left">↶ 90°</button><button type="button" data-build="rotate-right" title="Rotate right">90° ↷</button></div>
+    <div class="buildRow"><button type="button" data-build="add-tile">＋ Path tile</button><button type="button" data-build="delete-tile">🗑 Delete</button></div>
     <div class="buildRow"><button type="button" data-build="undo">↶ Undo</button><button type="button" data-build="save" class="buildSave">✓ Save</button></div>
+    <button type="button" class="buildReset" data-build="publish">↗ Copy layout to publish</button>
     <button class="buildReset" type="button" data-build="reset">Reset selected</button>
   </div>
-  <div class="buildFeedback" id="buildStatus" role="status">1 m invisible grid · Changes save on this device.</div>
+  <div class="buildFeedback" id="buildStatus" role="status">1 m grid · Local draft. Published layouts are shared with everyone.</div>
  </div><div id="hotbar" aria-label="Five inventory slots"></div><div id="dragGhost" aria-hidden="true"></div>
 <section id="interaction" aria-live="polite"><div class="interaction-top"><strong id="interactionName"></strong><button id="interactionClose" type="button" style="display:none" aria-label="Close interaction menu">✕ Close</button></div><p id="interactionInfo"></p><div id="cookerSlot" style="display:none;margin:8px 0;padding:9px;border:1px solid #a7b39a;border-radius:8px;background:#284b39"></div><div id="fireSlot" style="display:none;margin:8px 0;padding:9px;border:1px solid #a7b39a;border-radius:8px;background:#284b39"></div><div id="interactionActions"></div><div id="chopProgress"><div id="chopFill"></div></div></section><div id="toast" role="status"></div>
 <div id="storageOverlay" role="dialog" aria-modal="true" aria-label="Storage inventory">
@@ -624,23 +626,7 @@ for(const [id,[dx,dz]] of Object.entries(campLayoutShifts)){
 // The centre of the circle is near the campfire; both log seats lie within it.
 const campGravelCentre=[.10,.40],campGravelRadius=6.35;
 // Every route stops at a usable/front-facing approach, never behind its prop.
-const campFootpaths=[
- {name:'Entrance to hearth',width:2.05,points:[[0,16],[.10,13],[.12,10.4],[.06,8],[.1,5.8]]},
- // Board paper faces +Z; reading position is directly in front at (-4.4, 13.4).
- {name:'Read the message board',width:1.50,points:[[0,15.2],[-2.0,15.0],[-4.2,14.35],[-4.4,13.45]]},
- // Tent's fabric entrance faces +Z, so retain its working front approach.
- {name:'Tent entrance',width:1.78,points:[[-5.4,1.3],[-6.6,.6],[-7.35,-1.05],[-7.2,-3.35],[-8.05,-4.55],[-9.7,-4.8],[-10.75,-4.8]]},
- // Openable storage crate faces +Z, away from the tent wall.
- {name:'Storage working face',width:1.52,points:[[-6.75,.55],[-8.35,-.12],[-10.35,-.95],[-11.1,-1.18]]},
- // East side of the fire hub connects to the benches and the grill.
- {name:'Dining bench approach',width:1.60,points:[[4.4,-3.35],[5.8,-3.7],[7.2,-4.1]]},
- {name:'Cooking and dining',width:1.85,points:[[5.1,-4.45],[5.75,-6.05],[5.7,-8.15],[6.15,-10.0],[8.1,-10.25],[10.55,-10.33],[12.7,-10.22]]},
- // Rack and chopping stump are approached from their reachable open sides.
- {name:'Wood rack front',width:1.52,points:[[5.9,1.55],[6.65,2.35],[8.05,3.05]]},
- {name:'Chopping working face',width:1.52,points:[[6.65,2.35],[7.65,3.8],[9.0,4.4],[10.55,4.03],[11.0,3.23]]},
- // Shower back wall is -Z. Approach the open +Z doorway.
- {name:'Shower front doorway',width:1.64,points:[[.10,13.2],[2.2,14.65],[4.9,15.6],[7.1,14.7],[9.25,13.2],[10.65,11.7],[11,10.87]]}
-];
+const campFootpaths=[]; // Creator places the connecting paths as individual tiles.
 function pathSegmentDistance(x,z,points){
  let best=Infinity;
  for(let j=1;j<points.length;j++){
@@ -709,14 +695,19 @@ const buildPathGroups={};
 let pathStart=positions.length/3;
 paveGravelCircle();
 buildPathGroups['path-courtyard']={startV:pathStart,endV:positions.length/3,name:'Central gravel courtyard',x:campGravelCentre[0],z:campGravelCentre[1]};
-for(let i=0;i<campFootpaths.length;i++){
- const route=campFootpaths[i];
- for(let j=1;j<route.points.length;j++){
-  pathStart=positions.length/3;
-  paveGravelTrail({width:route.width,points:[route.points[j-1],route.points[j]]},i*13+j);
-  const a=route.points[j-1],b=route.points[j];
-  buildPathGroups['path-'+i+'-'+j]={startV:pathStart,endV:positions.length/3,name:route.name+' · section '+j,x:(a[0]+b[0])*.5,z:(a[1]+b[1])*.5};
- }
+// Preallocated individual 1 x 1 metre gravel tiles. Unused tiles are hidden.
+const PATH_TILE_CAPACITY=180;
+for(let i=0;i<PATH_TILE_CAPACITY;i++){
+ const begin=positions.length/3;
+ const seed=8100+i*19,x=0,z=0,w=.5,y=ground(x,z)+.06;
+ const c=gravelSurface(x,z,seed),edge=gravelSurface(x,z,seed,true);
+ const at=(dx,dz)=>[x+dx,ground(x+dx,z+dz)+.061,z+dz];
+ quad(at(-w,-w),at(w,-w),at(w,w),at(-w,w),c);
+ // Four slender uneven edging strips, attached to the tile geometry.
+ const strip=(x0,z0,x1,z1)=>{const a=at(x0,z0),b=at(x1,z0),d=at(x0,z1),e=at(x1,z1);quad(a,b,e,d,edge);};
+ strip(-.5,-.5,.5,-.43);strip(-.5,.43,.5,.5);
+ strip(-.5,-.43,-.43,.43);strip(.43,-.43,.5,.43);
+ buildPathGroups['tile-'+i]={startV:begin,endV:positions.length/3,name:'Path tile '+(i+1),x:0,z:0,category:'Tile'};
 }
 // A scattering of flat stones and small earth flecks adds scale without collision.
 for(let i=0;i<670;i++){
@@ -1909,7 +1900,9 @@ document.getElementById('boardOwnerSave').addEventListener('click',async()=>{
 
 // WOODLAND BUILD MODE. Geometry is based on an immutable copy of the original
 // mesh, so repositioning preserves its shape, normals and collision/interaction.
-const BUILD_STORAGE='woodland-camp-build-layout-v1',BUILD_GRID=1;
+const BUILD_STORAGE='woodland-camp-build-layout-v2',BUILD_GRID=1;
+const creatorMode=new URLSearchParams(location.search).get('creator')==='1';
+document.getElementById('buildToggle').style.display=creatorMode?'':'none';
 const buildPanel=document.getElementById('buildPanel');
 const buildSelect=document.getElementById('buildObject');
 const buildCoords=document.getElementById('buildCoords');
@@ -1942,7 +1935,7 @@ for(const key of Object.keys(campGroupRanges)){
  buildRanges[key]={...range,x,z,name:buildNames[key]||key,category:'Object'};
  for(const o of related)buildObjectToGroup[o.id]=key;
 }
-for(const [id,range] of Object.entries(buildPathGroups))buildRanges[id]={...range,category:'Path'};
+for(const [id,range] of Object.entries(buildPathGroups))if(id.startsWith('tile-'))buildRanges[id]={...range,category:'Tile'};
 const originalBuffer=buf.slice();
 const anchorSnapshots={};
 for(const o of usable){anchorSnapshots[o.id]={x:o.x,z:o.z,w:o.w,d:o.d};}
@@ -1966,7 +1959,7 @@ function buildValidate(id,state){
  const range=buildRanges[id],x=range.x+state.dx,z=range.z+state.dz;
  if(Math.abs(x)>85||Math.abs(z)>85)return false;
  // Avoid the lake and extremely steep terrain, where flat props float.
- if(range.category==='Object'){
+ if(range.category==='Object'||range.category==='Tile'){
   if(Math.hypot(x+55,z+42)<26)return false;
   if(ground(x,z)>16)return false;
  }
@@ -1977,13 +1970,13 @@ function setBuildTransform(id,state){
  const range=buildRanges[id],origin=originalGroupAnchors[id],rotation=((state.rot||0)%4+4)%4;
  // Transform original geometry, never already transformed vertices.
  const baseY=ground(origin.x,origin.z),targetY=ground(origin.x+state.dx,origin.z+state.dz);
- const deltaY=range.category==='Path'?0:Math.max(-1.6,Math.min(1.6,targetY-baseY));
+ const deltaY=range.category==='Tile'?0:Math.max(-1.6,Math.min(1.6,targetY-baseY));
  for(let i=range.startV;i<range.endV;i++){
   const idx=i*9,x=originalBuffer[idx],y=originalBuffer[idx+1],z=originalBuffer[idx+2];
   const next=buildTransformXZ(x,z,origin,state.dx,state.dz,rotation);
   buf[idx]=next[0];buf[idx+2]=next[1];
   // Paving is re-grounded vertex by vertex to avoid floating slabs.
-  buf[idx+1]=range.category==='Path'?y+ground(next[0],next[1])-ground(x,z):y+deltaY;
+  buf[idx+1]=range.category==='Tile'?(state.deleted?-800:y+ground(next[0],next[1])-ground(x,z)):y+deltaY;
   const normal=buildTransformXZ(originalBuffer[idx+6],originalBuffer[idx+8],{x:0,z:0},0,0,rotation);
   buf[idx+6]=normal[0];buf[idx+8]=normal[1];
  }
@@ -2005,17 +1998,18 @@ function setBuildTransform(id,state){
   const face=buildTransformXZ(base.face[0],base.face[1],origin,state.dx,state.dz,rotation);
   a.x=x;a.z=z;a.face=face;
  }
- buildStates[id]={dx:state.dx,dz:state.dz,rot:rotation};
+ buildStates[id]={dx:state.dx,dz:state.dz,rot:rotation,...(range.category==='Tile'?{deleted:!!state.deleted}:{})};
  return true;
 }
 function buildSave(){
- try{localStorage.setItem(BUILD_STORAGE,JSON.stringify(buildStates));buildStatus.textContent='✓ Layout saved on this device.';return true;}
+ if(!creatorMode)return false;
+ try{localStorage.setItem(BUILD_STORAGE,JSON.stringify(buildStates));buildStatus.textContent='✓ Draft saved on this device. Use Copy layout to publish for everyone.';return true;}
  catch(e){buildStatus.textContent='Could not save. Check browser storage permissions.';return false;}
 }
 function buildRefresh(){
  const r=buildRanges[buildSelected],p=buildStates[buildSelected]||{dx:0,dz:0,rot:0};
  if(!r)return;
- buildCoords.textContent='X '+(r.x+p.dx).toFixed(1)+' m · Z '+(r.z+p.dz).toFixed(1)+' m · '+(p.rot*90)+'°';
+ buildCoords.textContent=(r.category==='Tile'&&p.deleted?'Not placed · ':'')+'X '+(r.x+p.dx).toFixed(1)+' m · Z '+(r.z+p.dz).toFixed(1)+' m · '+(p.rot*90)+'°';
 }
 function buildSelectItem(id){
  if(!buildRanges[id])return;
@@ -2023,16 +2017,21 @@ function buildSelectItem(id){
  buildStatus.textContent=buildRanges[id].category+' selected. Use arrows to move, rotate to turn.';
 }
 function buildAction(action){
+ if(!creatorMode)return;
  if(action==='save'){buildSave();return;}
+ if(action==='publish'){buildCopyPublish();return;}
+ if(action==='add-tile'){buildAddTile();return;}
+ if(action==='delete-tile'){buildDeleteTile();return;}
  if(action==='undo'){
   const previous=buildHistory.pop();
-  if(previous){setBuildTransform(previous.id,previous.state);buildSelectItem(previous.id);buildStatus.textContent='Undid last change.';}
+  if(previous){setBuildTransform(previous.id,previous.state);buildRefreshOptions();buildSelectItem(previous.id);buildStatus.textContent='Undid last change.';}
   else buildStatus.textContent='Nothing to undo.';
   return;
  }
  if(action==='nearby'){
   let choice=null,dist=Infinity;
   for(const [id,r] of Object.entries(buildRanges)){
+   if(r.category==='Tile'&&buildStates[id]?.deleted!==false)continue;
    const p=buildStates[id]||{dx:0,dz:0},d=Math.hypot(camera[0]-(r.x+p.dx),camera[2]-(r.z+p.dz));
    if(d<dist){dist=d;choice=id;}
   }
@@ -2041,35 +2040,117 @@ function buildAction(action){
   return;
  }
  if(!buildSelected)return;
- const state=buildStates[buildSelected]||{dx:0,dz:0,rot:0},next={...state};
+ const state=buildStates[buildSelected]||{dx:0,dz:0,rot:0,deleted:buildRanges[buildSelected]?.category==='Tile'},next={...state};
  if(action==='north')next.dz-=BUILD_GRID;
  else if(action==='south')next.dz+=BUILD_GRID;
  else if(action==='west')next.dx-=BUILD_GRID;
  else if(action==='east')next.dx+=BUILD_GRID;
  else if(action==='rotate-left')next.rot=(next.rot+3)%4;
  else if(action==='rotate-right')next.rot=(next.rot+1)%4;
- else if(action==='reset'){next.dx=0;next.dz=0;next.rot=0;}
+ else if(action==='reset'){next.dx=0;next.dz=0;next.rot=0;if(buildRanges[buildSelected].category==='Tile')next.deleted=true;}
  else return;
  if(!buildValidate(buildSelected,next)){buildStatus.textContent='Placement outside the buildable ground. Choose another square.';return;}
  buildHistory.push({id:buildSelected,state:{...state}});
  if(buildHistory.length>100)buildHistory.shift();
  setBuildTransform(buildSelected,next);
- buildRefresh();buildStatus.textContent='Placement updated. Tap Save layout to keep it.';
+ buildRefresh();buildStatus.textContent='Position updated. Save draft, then copy layout to publish.';
  updateNearby();
 }
-buildSelect.innerHTML='<optgroup label="Camp structures">'+Object.entries(buildRanges).filter(([id,r])=>r.category==='Object').map(([id,r])=>'<option value="'+id+'">'+r.name+'</option>').join('')+'</optgroup>'+
- '<optgroup label="Paths and gravel sections">'+Object.entries(buildRanges).filter(([id,r])=>r.category==='Path').map(([id,r])=>'<option value="'+id+'">'+r.name+'</option>').join('')+'</optgroup>';
-try{
- const saved=JSON.parse(localStorage.getItem(BUILD_STORAGE)||'null');
- if(saved&&typeof saved==='object')for(const [id,state] of Object.entries(saved)){
-  if(buildRanges[id]&&Number.isInteger(state.dx)&&Number.isInteger(state.dz)&&Number.isInteger(state.rot)&&Math.abs(state.dx)<=80&&Math.abs(state.dz)<=80)setBuildTransform(id,state);
+
+function buildRefreshOptions(){
+ const prev=buildSelected;
+ buildSelect.innerHTML='<optgroup label="Camp structures">'+Object.entries(buildRanges).filter(([id,r])=>r.category==='Object').map(([id,r])=>'<option value="'+id+'">'+r.name+'</option>').join('')+'</optgroup>'+
+ '<optgroup label="Your path tiles">'+Object.entries(buildRanges).filter(([id,r])=>r.category==='Tile'&&buildStates[id]?.deleted===false).map(([id,r])=>'<option value="'+id+'">'+r.name+'</option>').join('')+'</optgroup>';
+ if(prev&&buildRanges[prev]&&(buildRanges[prev].category!=='Tile'||buildStates[prev]?.deleted===false))buildSelect.value=prev;
+}
+function buildAddTile(){
+ const entry=Object.entries(buildRanges).find(([id,r])=>r.category==='Tile'&&buildStates[id]?.deleted!==false);
+ if(!entry){buildStatus.textContent='Tile limit reached. Delete unused tiles to free space.';return;}
+ const [id,r]=entry,step=3;
+ const x=Math.round(camera[0]-Math.sin(yaw)*step),z=Math.round(camera[2]-Math.cos(yaw)*step);
+ const newState={dx:x,dz:z,rot:0,deleted:false};
+ if(!buildValidate(id,newState)){buildStatus.textContent='Look towards clear, level ground to add a tile.';return;}
+ const old={...(buildStates[id]||{dx:0,dz:0,rot:0,deleted:true})};
+ buildHistory.push({id,state:old});
+ setBuildTransform(id,newState);buildRefreshOptions();buildSelectItem(id);
+ buildStatus.textContent='Added path tile '+(Number(id.slice(5))+1)+'. Move it or delete it anytime.';
+}
+function buildDeleteTile(){
+ if(!buildSelected||buildRanges[buildSelected]?.category!=='Tile'){buildStatus.textContent='Select a path tile before deleting.';return;}
+ const id=buildSelected,old={...buildStates[id]},next={...old,deleted:true};
+ buildHistory.push({id,state:old});
+ setBuildTransform(id,next);buildSelected='';buildRefreshOptions();
+ if(buildSelect.options.length)buildSelectItem(buildSelect.value);
+ buildStatus.textContent='Path tile deleted. You can undo this.';
+}
+function buildPublishedPayload(){
+ const objects={},tiles=[];
+ for(const [id,r] of Object.entries(buildRanges)){
+  const p=buildStates[id];if(!p)continue;
+  if(r.category==='Object'){
+   if(p.dx||p.dz||p.rot)objects[id]={dx:p.dx,dz:p.dz,rot:p.rot};
+  }else if(r.category==='Tile'&&!p.deleted){
+   tiles.push({id,x:p.dx,z:p.dz,rot:p.rot});
+  }
  }
-}catch(e){console.warn('Saved build layout invalid',e);}
+ return {version:2,objects,tiles};
+}
+async function buildCopyPublish(){
+ const json=JSON.stringify(buildPublishedPayload(),null,2);
+ try{
+  await navigator.clipboard.writeText(json);
+  buildStatus.textContent='✓ Layout copied. Paste it into our ChatGPT conversation and say “Publish this layout” to update everyone.';
+ }catch(_){
+  const blob=new Blob([json],{type:'application/json'}),url=URL.createObjectURL(blob);
+  const link=document.createElement('a');link.href=url;link.download='world-layout.json';link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  buildStatus.textContent='Layout downloaded. Upload the file here to publish it.';
+ }
+}
+function applyBuildPayload(data){
+ if(!data||data.version!==2||!data.objects||!Array.isArray(data.tiles))return false;
+ for(const [id,p] of Object.entries(data.objects)){
+  if(buildRanges[id]?.category==='Object'&&Number.isInteger(p.dx)&&Number.isInteger(p.dz)&&Number.isInteger(p.rot)&&Math.abs(p.dx)<=80&&Math.abs(p.dz)<=80)setBuildTransform(id,p);
+ }
+ for(const tile of data.tiles.slice(0,PATH_TILE_CAPACITY)){
+  if(!Number.isInteger(tile.x)||!Number.isInteger(tile.z)||!Number.isInteger(tile.rot))continue;
+  if(Math.abs(tile.x)>80||Math.abs(tile.z)>80)continue;
+  let id=typeof tile.id==='string'&&buildRanges[tile.id]?.category==='Tile'?tile.id:null;
+  if(!id)id=Object.entries(buildRanges).find(([key,r])=>r.category==='Tile'&&buildStates[key]?.deleted!==false)?.[0];
+  if(id)setBuildTransform(id,{dx:tile.x,dz:tile.z,rot:tile.rot,deleted:false});
+ }
+ return true;
+}
+// Published GitHub file is the public source of truth; editor may keep a local draft.
+for(const [id,r] of Object.entries(buildRanges))if(r.category==='Tile')setBuildTransform(id,{dx:0,dz:0,rot:0,deleted:true});
+const localDraft=creatorMode?(()=>{
+ try{return JSON.parse(localStorage.getItem(BUILD_STORAGE)||'null');}catch(_){return null;}
+})():null;
+fetch('./world-layout.json?sync='+Math.floor(Date.now()/60000),{cache:'no-store'})
+ .then(r=>{if(!r.ok)throw Error('Shared layout '+r.status);return r.json();})
+ .then(data=>{
+  if(!applyBuildPayload(data))throw Error('Invalid shared layout');
+  if(localDraft&&typeof localDraft==='object'){
+   // Local creator edits intentionally override the published public arrangement.
+   for(const [id,p] of Object.entries(localDraft)){
+    if(buildRanges[id]&&Number.isInteger(p.dx)&&Number.isInteger(p.dz)&&Number.isInteger(p.rot)&&Math.abs(p.dx)<=80&&Math.abs(p.dz)<=80)setBuildTransform(id,p);
+   }
+  }
+  buildRefreshOptions();
+  if(buildSelected)buildRefresh();
+ }).catch(err=>{console.warn('Published layout could not load',err);if(localDraft){
+  for(const [id,p] of Object.entries(localDraft)){
+   if(buildRanges[id]&&Number.isInteger(p.dx)&&Number.isInteger(p.dz)&&Number.isInteger(p.rot))setBuildTransform(id,p);
+  }
+  buildRefreshOptions();
+ }});
+buildRefreshOptions();
 buildSelect.addEventListener('change',()=>buildSelectItem(buildSelect.value));
 buildPanel.addEventListener('click',event=>{
  const button=event.target.closest('button[data-build]');if(button)buildAction(button.dataset.build);
 });
 function toggleBuild(force){
+ if(!creatorMode)return;
  buildMode=typeof force==='boolean'?force:!buildMode;
  buildPanel.style.display=buildMode?'block':'none';
  document.body.classList.toggle('build-active',buildMode);
@@ -2421,7 +2502,7 @@ function updateAtmosphere(date,dt){
 }
 
 function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}if(desktopMenuOpen||boardIsOpen||storageOpen||buildMode){forward=0;right=0;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;seatEyePosition=null;seatExitPosition=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=world.tentSleeping||seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=((seatedAt&&seatEyePosition?seatEyePosition[1]:walkingHeight(camera[0],camera[2])+(world.tentSleeping?.85:eyeHeight))-camera[1])*.20;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v4.2 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v4.3 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
