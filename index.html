@@ -164,7 +164,7 @@ body.build-active #buttons{bottom:auto;top:max(49px,calc(env(safe-area-inset-top
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v4.5</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v4.6</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
 <div id="sunMoon" aria-hidden="true"></div><canvas id="weatherFX" aria-hidden="true"></canvas>
 <div id="worldWeather" aria-live="off"><div class="weatherClockRow"><span id="gmtClock" class="weatherClock">--:--:-- GMT</span><span id="currentWeatherIcon" class="weatherIcon" role="img" aria-label="Weather loading" title="Weather loading">⏳</span></div><div id="weatherDate" class="weatherDetail">Bournemouth · synchronising</div><div id="weatherNow" class="weatherDetail">Connecting to weather forecast…</div><div id="weatherTomorrow" class="weatherDetail"></div><div class="weatherDetail"><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" style="pointer-events:auto;color:inherit;text-decoration:underline">Weather: Open-Meteo</a></div></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
@@ -697,14 +697,14 @@ const buildPathGroups={};
 let pathStart=positions.length/3;
 paveGravelCircle();
 buildPathGroups['path-courtyard']={startV:pathStart,endV:positions.length/3,name:'Central gravel courtyard',x:campGravelCentre[0],z:campGravelCentre[1]};
-// Preallocated individual 1 x 1 metre gravel tiles. Unused tiles are hidden.
+// Preallocated 4 x 4 metre terrain-following gravel tiles. Unused tiles are hidden.
 const PATH_TILE_CAPACITY=180;
-// Each tile spans 2 x 2 metres; subdivided terrain-hugging gravel is smooth,
+// Each tile spans 4 x 4 metres; subdivided terrain-hugging gravel is smooth,
 // has natural subtle colour variation, and has no overlapping coplanar edging.
 for(let i=0;i<PATH_TILE_CAPACITY;i++){
  const begin=positions.length/3;
- const seed=8100+i*19,sections=6,tileHalf=1;
- const at=(x,z,lift=.085)=>[x,ground(x,z)+lift,z];
+ const seed=8100+i*19,sections=12,tileHalf=2;
+ const at=(x,z,lift=.19)=>[x,ground(x,z)+lift,z];
  for(let row=0;row<sections;row++)for(let col=0;col<sections;col++){
   const x0=-tileHalf+2*tileHalf*col/sections,x1=-tileHalf+2*tileHalf*(col+1)/sections;
   const z0=-tileHalf+2*tileHalf*row/sections,z1=-tileHalf+2*tileHalf*(row+1)/sections;
@@ -712,7 +712,7 @@ for(let i=0;i<PATH_TILE_CAPACITY;i++){
   const variation=(rnd(seed+row*37+col*71)-.5)*.065;
   const base=edge?[.48,.45,.39]:[.53,.50,.44];
   const tone=base.map((v,j)=>Math.max(.12,Math.min(.85,v+variation+(j===0?.008:0))));
-  const lift=edge?.078:.091;
+  const lift=edge?.17:.19;
   quad(at(x0,z0,lift),at(x1,z0,lift),at(x1,z1,lift),at(x0,z1,lift),tone);
  }
  buildPathGroups['tile-'+i]={startV:begin,endV:positions.length/3,name:'Path tile '+(i+1),x:0,z:0,category:'Tile'};
@@ -2077,14 +2077,14 @@ function buildRefreshOptions(){
 function buildAddTile(){
  const entry=Object.entries(buildRanges).find(([id,r])=>r.category==='Tile'&&buildStates[id]?.deleted!==false);
  if(!entry){buildStatus.textContent='Tile limit reached. Delete unused tiles to free space.';return;}
- const [id,r]=entry,step=3;
- const x=Math.round(camera[0]-Math.sin(yaw)*step),z=Math.round(camera[2]-Math.cos(yaw)*step);
+ const [id,r]=entry,step=5;
+ const x=Math.round((camera[0]-Math.sin(yaw)*step)/2)*2,z=Math.round((camera[2]-Math.cos(yaw)*step)/2)*2;
  const newState={dx:x,dz:z,rot:0,deleted:false};
  if(!buildValidate(id,newState)){buildStatus.textContent='Look towards clear, level ground to add a tile.';return;}
  const old={...(buildStates[id]||{dx:0,dz:0,rot:0,deleted:true})};
  buildHistory.push({id,state:old});
  setBuildTransform(id,newState);buildSelectItem(id);buildTileActions.style.display='none';
- buildStatus.textContent='Added path tile '+(Number(id.slice(5))+1)+'. Move it or delete it anytime.';
+ buildStatus.textContent='Added 4 m × 4 m path tile '+(Number(id.slice(5))+1)+'. Move or delete it anytime.';
 }
 function buildDeleteTile(){
  if(!buildSelected||buildRanges[buildSelected]?.category!=='Tile'){buildStatus.textContent='Select a path tile before deleting.';return;}
@@ -2178,7 +2178,7 @@ function selectPathTileAt(clientX,clientY){
   for(const [id,state] of Object.entries(buildStates)){
    if(buildRanges[id]?.category!=='Tile'||state.deleted)continue;
    const px=state.dx,pz=state.dz;
-   if(Math.abs(x-px)<=1.02&&Math.abs(z-pz)<=1.02){
+   if(Math.abs(x-px)<=2.04&&Math.abs(z-pz)<=2.04){
     const distance=(x-px)*(x-px)+(z-pz)*(z-pz);
     if(distance<bestDist){bestDist=distance;best=id;}
    }
@@ -2577,7 +2577,7 @@ function updateAtmosphere(date,dt){
 }
 
 function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}if(desktopMenuOpen||boardIsOpen||storageOpen){forward=0;right=0;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;seatEyePosition=null;seatExitPosition=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=world.tentSleeping||seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=((seatedAt&&seatEyePosition?seatEyePosition[1]:walkingHeight(camera[0],camera[2])+(world.tentSleeping?.85:eyeHeight))-camera[1])*.20;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v4.5 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v4.6 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
