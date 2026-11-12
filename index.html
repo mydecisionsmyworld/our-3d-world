@@ -169,10 +169,47 @@ body.build-active #buttons{bottom:auto;top:max(49px,calc(env(safe-area-inset-top
 #worldWeather .weatherClock{font-size:13px;letter-spacing:.015em;font-weight:650;line-height:1.2}
 #worldWeather .weatherIcon{font-size:17px;min-width:18px;line-height:1}
 #worldWeather .weatherDetail{display:none !important}
+
+/* Compact controls for touch phones: preserve distinct hit areas and keep
+   proximity prompts comfortably above the joystick and quick-access bar. */
+@media (pointer:coarse) and (max-width:800px){
+ #pad{width:102px;height:102px;left:max(12px,env(safe-area-inset-left));bottom:max(84px,calc(env(safe-area-inset-bottom) + 70px));border-width:1.5px}
+ #knob{width:38px;height:38px;border-width:1.5px}
+ #buttons{right:max(9px,env(safe-area-inset-right));bottom:max(86px,calc(env(safe-area-inset-bottom) + 72px));gap:6px}
+ #buttons button{padding:9px 10px;font-size:11px;border-radius:9px;min-height:34px}
+ #hotbar{gap:3px;padding:3px;border-width:1px;bottom:max(7px,env(safe-area-inset-bottom))}
+ .hotbar-slot{width:clamp(31px,8.4vw,41px);height:clamp(34px,9.0vw,44px);font-size:18px;border-width:1.5px}
+ .hotbar-slot .num{font-size:9px}.hotbar-slot .qty{font-size:10px}
+ #interaction[data-desktop-prompt="1"]{bottom:max(222px,calc(env(safe-area-inset-bottom) + 206px));max-width:196px;padding:7px 9px;border-radius:10px}
+ #interaction[data-desktop-prompt="1"] #interactionName{font-size:11px}
+ #interaction[data-desktop-prompt="1"] #interactionOpen{font-size:11px;padding:7px 9px;min-height:32px;margin-top:5px}
+ #interaction[data-desktop-open="1"]{bottom:max(209px,calc(env(safe-area-inset-bottom) + 193px));width:min(286px,calc(100vw - 24px));max-height:min(47vh,390px);padding:9px;font-size:11px;border-radius:11px}
+ #interaction[data-desktop-open="1"] strong{font-size:12px}
+ #interaction[data-desktop-open="1"] #interactionActions{gap:5px}
+ #interaction[data-desktop-open="1"] #interactionActions button{padding:8px 9px;font-size:11px}
+ #interaction[data-desktop-open="1"] #interactionInfo{font-size:10px}
+ #toast{font-size:11px;padding:8px 11px;max-width:76%}
+ #buildPanel .buildPicker{padding:6px;gap:5px;font-size:10px}
+ #buildPanel .buildPicker select{font-size:11px}
+ #buildPanel .buildPicker button{font-size:10px;padding:6px}
+ #buildPanel .buildControls{width:116px;padding:6px;bottom:max(119px,calc(env(safe-area-inset-bottom) + 100px))}
+ #buildPanel .buildMove button{min-height:29px;font-size:14px}
+ #buildPanel .buildRow button{font-size:9px;padding:6px 2px}
+ #buildPanel #buildCoords{font-size:9px}
+ #buildPanel .buildFeedback{font-size:9px;bottom:max(66px,calc(env(safe-area-inset-bottom) + 50px))}
+}
+@media (pointer:coarse) and (max-height:520px){
+ #pad{width:85px;height:85px;bottom:max(58px,calc(env(safe-area-inset-bottom) + 45px))}
+ #knob{width:34px;height:34px}
+ #buttons{bottom:max(56px,calc(env(safe-area-inset-bottom) + 44px))}
+ #interaction[data-desktop-prompt="1"]{bottom:58%;max-width:188px}
+ #interaction[data-desktop-open="1"]{bottom:48%;max-height:45vh}
+}
+
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v5.4</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v5.5</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
 <div id="sunMoon" aria-hidden="true"></div><canvas id="weatherFX" aria-hidden="true"></canvas>
 <div id="worldWeather" aria-live="off"><div class="weatherClockRow"><span id="gmtClock" class="weatherClock">--:--:-- GMT</span><span id="currentWeatherIcon" class="weatherIcon" role="img" aria-label="Weather loading" title="Weather loading">⏳</span></div><div id="weatherDate" class="weatherDetail">Bournemouth · synchronising</div><div id="weatherNow" class="weatherDetail">Connecting to weather forecast…</div><div id="weatherTomorrow" class="weatherDetail"></div><div class="weatherDetail"><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" style="pointer-events:auto;color:inherit;text-decoration:underline">Weather: Open-Meteo</a></div></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div><div id="buildPlacementMarker" aria-hidden="true" style="display:none">＋</div><div id="buildLookSurface" aria-label="Drag to look around or tap a path tile" style="display:none"></div>
@@ -1546,7 +1583,9 @@ function performAction(objectId,actionId){
    if(inventory[selectedSlot]?.id!=='axe')return {ok:false,message:'Select an axe in your hotbar first.'};
    if(woodCapacity()<tree.wood)return {ok:false,message:'Not enough inventory room for the wood.'};
    chopJob={id:tree.id,started:performance.now(),duration:tree.duration*1000};
-   renderInteraction();
+   // The action menu must not remain open and freeze movement after chopping.
+   if(desktopMenuOpen)closeDesktopInteraction(false);
+   showToast('🪓 Chopping tree…');
    return {ok:true,message:'Chopping started.'};
  } else if(objectId==='board'){
    openBoard();return {ok:true,message:'Board opened.'};
@@ -1590,12 +1629,14 @@ function performAction(objectId,actionId){
 function advanceChopping(now){
  if(!chopJob)return;
  const tree=resolveObject(chopJob.id);
- if(!tree||tree.chopped){chopJob=null;return;}
+ if(!tree||tree.chopped){chopJob=null;if(desktopMenuOpen)closeDesktopInteraction(false);return;}
  const ratio=Math.min(1,(now-chopJob.started)/chopJob.duration);
  const progress=document.getElementById('chopProgress'),fill=document.getElementById('chopFill');
  progress.style.display='block';fill.style.width=(ratio*100).toFixed(1)+'%';
  if(ratio<1)return;
  chopJob=null;progress.style.display='none';
+ // Clear stale modal state on completion, including when the tree is removed.
+ if(desktopMenuOpen)closeDesktopInteraction(false);
  if(addItem('wood',tree.wood)){
   removeTree(tree);saveFelledTrees();
   showToast('Tree chopped! +'+tree.wood+' wood');
@@ -1678,7 +1719,7 @@ function renderInteraction(){
     if(result.ok&&['open','openBoard'].includes(action.id)){
       desktopMenuOpen=false;
     }
-    if(result.ok&&['sit','stand','hunt'].includes(action.id)){
+    if(result.ok&&['chop','sit','stand','hunt'].includes(action.id)){
       closeDesktopInteraction(true);
     }else{updateNearby();renderInteraction();}
    });
@@ -2715,7 +2756,7 @@ function updateAtmosphere(date,dt){
 }
 
 function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}if(desktopMenuOpen||boardIsOpen||storageOpen){forward=0;right=0;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;seatEyePosition=null;seatExitPosition=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=world.tentSleeping||seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=((seatedAt&&seatEyePosition?seatEyePosition[1]:walkingHeight(camera[0],camera[2])+(world.tentSleeping?.85:eyeHeight))-camera[1])*.20;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&desktopMenuOpen&&!buildMode)renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v5.4 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&desktopMenuOpen&&!buildMode)renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v5.5 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
