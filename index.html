@@ -164,7 +164,7 @@ body.build-active #buttons{bottom:auto;top:max(49px,calc(env(safe-area-inset-top
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v4.8</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v4.9</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
 <div id="sunMoon" aria-hidden="true"></div><canvas id="weatherFX" aria-hidden="true"></canvas>
 <div id="worldWeather" aria-live="off"><div class="weatherClockRow"><span id="gmtClock" class="weatherClock">--:--:-- GMT</span><span id="currentWeatherIcon" class="weatherIcon" role="img" aria-label="Weather loading" title="Weather loading">⏳</span></div><div id="weatherDate" class="weatherDetail">Bournemouth · synchronising</div><div id="weatherNow" class="weatherDetail">Connecting to weather forecast…</div><div id="weatherTomorrow" class="weatherDetail"></div><div class="weatherDetail"><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" style="pointer-events:auto;color:inherit;text-decoration:underline">Weather: Open-Meteo</a></div></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
@@ -184,7 +184,8 @@ body.build-active #buttons{bottom:auto;top:max(49px,calc(env(safe-area-inset-top
     </div>
     <div class="buildRow"><button type="button" data-build="rotate-left" title="Rotate left">↶ 90°</button><button type="button" data-build="rotate-right" title="Rotate right">90° ↷</button></div>
     <div class="buildRow"><button type="button" data-build="add-tile">＋ Path tile</button><button type="button" data-build="delete-tile">🗑 Delete</button></div>
-    <div class="buildRow"><button type="button" data-build="undo">↶ Undo</button><button type="button" data-build="save" class="buildSave">✓ Save</button></div>
+    <div class="buildRow"><button type="button" data-build="undo">↶ Undo</button><button type="button" data-build="save" class="buildSave">✓ Save draft</button></div>
+    <div class="buildRow"><button type="button" data-build="load-published">↻ Published</button><button type="button" data-build="restore-draft">↺ My draft</button></div>
     <button type="button" class="buildReset" data-build="publish">↗ Copy layout to publish</button>
     <button class="buildReset" type="button" data-build="reset">Reset selected</button>
   </div>
@@ -1918,6 +1919,7 @@ const buildStatus=document.getElementById('buildStatus');
 const buildTileActions=document.getElementById('buildTileActions');
 let buildTilePick=null;
 const buildRanges={},buildStates={},buildHistory=[];
+let layoutReady=false,publishedLayout=null,layoutDirty=false,layoutMode='published';
 let buildMode=false,buildSelected='';
 const buildNames={
  tent:'Canvas tent',fire:'Campfire and fire ring',dining:'Dining table and benches',
@@ -2012,8 +2014,8 @@ function setBuildTransform(id,state){
  return true;
 }
 function buildSave(){
- if(!creatorMode)return false;
- try{localStorage.setItem(BUILD_STORAGE,JSON.stringify(buildStates));buildStatus.textContent='✓ Draft saved on this device. Use Copy layout to publish for everyone.';return true;}
+ if(!creatorMode||!layoutReady)return false;
+ try{localStorage.setItem(BUILD_STORAGE,JSON.stringify(buildStates));layoutMode='draft';layoutDirty=false;buildStatus.textContent='✓ Draft saved on this device. Copy layout to publish for everyone.';return true;}
  catch(e){buildStatus.textContent='Could not save. Check browser storage permissions.';return false;}
 }
 function buildRefresh(){
@@ -2027,14 +2029,16 @@ function buildSelectItem(id){
  buildStatus.textContent=buildRanges[id].category+' selected. Use arrows to move, rotate to turn.';
 }
 function buildAction(action){
- if(!creatorMode)return;
+ if(!creatorMode||!layoutReady)return;
+ if(action==='load-published'){restorePublishedLayout();return;}
+ if(action==='restore-draft'){restoreSavedDraft();return;}
  if(action==='save'){buildSave();return;}
  if(action==='publish'){buildCopyPublish();return;}
  if(action==='add-tile'){buildAddTile();return;}
  if(action==='delete-tile'){buildDeleteTile();return;}
  if(action==='undo'){
   const previous=buildHistory.pop();
-  if(previous){setBuildTransform(previous.id,previous.state);buildRefreshOptions();if(buildRanges[previous.id].category!=='Tile'||!previous.state.deleted)buildSelectItem(previous.id);buildTileActions.style.display='none';buildStatus.textContent='Undid last change.';}
+  if(previous){setBuildTransform(previous.id,previous.state);layoutDirty=true;layoutMode='draft';buildRefreshOptions();if(buildRanges[previous.id].category!=='Tile'||!previous.state.deleted)buildSelectItem(previous.id);buildTileActions.style.display='none';buildStatus.textContent='Undid last change.';}
   else buildStatus.textContent='Nothing to undo.';
   return;
  }
@@ -2064,7 +2068,7 @@ function buildAction(action){
  buildHistory.push({id:buildSelected,state:{...state}});
  if(buildHistory.length>100)buildHistory.shift();
  setBuildTransform(buildSelected,next);
- buildRefresh();buildStatus.textContent='Position updated. Save draft, then copy layout to publish.';
+ layoutDirty=true;layoutMode='draft';buildRefresh();buildStatus.textContent='Unpublished edits · Save draft or copy layout to publish.';
  updateNearby();
 }
 
@@ -2083,14 +2087,14 @@ function buildAddTile(){
  if(!buildValidate(id,newState)){buildStatus.textContent='Look towards clear, level ground to add a tile.';return;}
  const old={...(buildStates[id]||{dx:0,dz:0,rot:0,deleted:true})};
  buildHistory.push({id,state:old});
- setBuildTransform(id,newState);buildSelectItem(id);buildTileActions.style.display='none';
+ setBuildTransform(id,newState);layoutDirty=true;layoutMode='draft';buildSelectItem(id);buildTileActions.style.display='none';
  buildStatus.textContent='Added path tile '+(Number(id.slice(5))+1)+'. Move it or delete it anytime.';
 }
 function buildDeleteTile(){
  if(!buildSelected||buildRanges[buildSelected]?.category!=='Tile'){buildStatus.textContent='Select a path tile before deleting.';return;}
  const id=buildSelected,old={...buildStates[id]},next={...old,deleted:true};
  buildHistory.push({id,state:old});
- setBuildTransform(id,next);buildSelected='';buildTileActions.style.display='none';buildRefreshOptions();
+ setBuildTransform(id,next);layoutDirty=true;layoutMode='draft';buildSelected='';buildTileActions.style.display='none';buildRefreshOptions();
  if(buildSelect.options.length)buildSelectItem(buildSelect.options[0].value);
  buildStatus.textContent='Path tile deleted. You can undo this.';
 }
@@ -2107,6 +2111,7 @@ function buildPublishedPayload(){
  return {version:2,objects,tiles};
 }
 async function buildCopyPublish(){
+ if(!layoutReady){buildStatus.textContent='Wait for the published world to finish loading.';return;}
  const json=JSON.stringify(buildPublishedPayload(),null,2);
  try{
   await navigator.clipboard.writeText(json);
@@ -2118,44 +2123,89 @@ async function buildCopyPublish(){
   buildStatus.textContent='Layout downloaded. Upload the file here to publish it.';
  }
 }
-function applyBuildPayload(data){
- if(!data||data.version!==2||!data.objects||!Array.isArray(data.tiles))return false;
- for(const [id,p] of Object.entries(data.objects)){
-  if(buildRanges[id]?.category==='Object'&&Number.isInteger(p.dx)&&Number.isInteger(p.dz)&&Number.isInteger(p.rot)&&Math.abs(p.dx)<=80&&Math.abs(p.dz)<=80)setBuildTransform(id,p);
+
+// A single deterministic base: both visitors and creator load the exact same
+// published JSON first. An older local draft is NEVER applied automatically.
+function resetBuildGeometry(){
+ for(const [id,r] of Object.entries(buildRanges)){
+  const base={dx:0,dz:0,rot:0,...(r.category==='Tile'?{deleted:true}:{})};
+  if(!setBuildTransform(id,base))console.warn('Could not reset object',id);
  }
- for(const tile of data.tiles.slice(0,PATH_TILE_CAPACITY)){
-  if(!Number.isInteger(tile.x)||!Number.isInteger(tile.z)||!Number.isInteger(tile.rot))continue;
-  if(Math.abs(tile.x)>80||Math.abs(tile.z)>80)continue;
-  let id=typeof tile.id==='string'&&buildRanges[tile.id]?.category==='Tile'?tile.id:null;
-  if(!id)id=Object.entries(buildRanges).find(([key,r])=>r.category==='Tile'&&buildStates[key]?.deleted!==false)?.[0];
-  if(id)setBuildTransform(id,{dx:tile.x,dz:tile.z,rot:tile.rot,deleted:false});
+}
+function validateBuildPayload(data){
+ if(!data||data.version!==2||!data.objects||typeof data.objects!=='object'||Array.isArray(data.objects)||!Array.isArray(data.tiles))return false;
+ if(data.tiles.length>PATH_TILE_CAPACITY)return false;
+ const validPosition=(p)=>p&&Number.isInteger(p.dx)&&Number.isInteger(p.dz)&&Number.isInteger(p.rot)&&
+  Math.abs(p.dx)<=80&&Math.abs(p.dz)<=80&&p.rot>=0&&p.rot<4;
+ for(const [id,p] of Object.entries(data.objects)){
+  if(buildRanges[id]?.category!=='Object'||!validPosition(p)||!buildValidate(id,p))return false;
+ }
+ const seen=new Set();
+ for(const t of data.tiles){
+  const id=t?.id;
+  const p={dx:t?.x,dz:t?.z,rot:t?.rot};
+  if(typeof id!=='string'||buildRanges[id]?.category!=='Tile'||seen.has(id)||!validPosition(p)||!buildValidate(id,p))return false;
+  seen.add(id);
  }
  return true;
 }
-// Published GitHub file is the public source of truth; editor may keep a local draft.
-for(const [id,r] of Object.entries(buildRanges))if(r.category==='Tile')setBuildTransform(id,{dx:0,dz:0,rot:0,deleted:true});
-const localDraft=creatorMode?(()=>{
- try{return JSON.parse(localStorage.getItem(BUILD_STORAGE)||localStorage.getItem('woodland-camp-build-layout-v1')||'null');}catch(_){return null;}
-})():null;
-fetch('./world-layout.json?sync='+Math.floor(Date.now()/60000),{cache:'no-store'})
- .then(r=>{if(!r.ok)throw Error('Shared layout '+r.status);return r.json();})
- .then(data=>{
-  if(!applyBuildPayload(data))throw Error('Invalid shared layout');
-  if(localDraft&&typeof localDraft==='object'){
-   // Local creator edits intentionally override the published public arrangement.
-   for(const [id,p] of Object.entries(localDraft)){
-    if(buildRanges[id]&&Number.isInteger(p.dx)&&Number.isInteger(p.dz)&&Number.isInteger(p.rot)&&Math.abs(p.dx)<=80&&Math.abs(p.dz)<=80)setBuildTransform(id,p);
-   }
-  }
-  buildRefreshOptions();
-  if(buildSelected)buildRefresh();
- }).catch(err=>{console.warn('Published layout could not load',err);if(localDraft){
-  for(const [id,p] of Object.entries(localDraft)){
-   if(buildRanges[id]&&Number.isInteger(p.dx)&&Number.isInteger(p.dz)&&Number.isInteger(p.rot))setBuildTransform(id,p);
-  }
-  buildRefreshOptions();
- }});
+function applyBuildPayload(data){
+ if(!validateBuildPayload(data))return false;
+ resetBuildGeometry();
+ for(const [id,p] of Object.entries(data.objects))setBuildTransform(id,p);
+ for(const tile of data.tiles)setBuildTransform(tile.id,{dx:tile.x,dz:tile.z,rot:tile.rot,deleted:false});
+ return true;
+}
+function storedBuildDraft(){
+ if(!creatorMode)return null;
+ try{
+  const raw=localStorage.getItem(BUILD_STORAGE)||localStorage.getItem('woodland-camp-build-layout-v1');
+  const value=raw?JSON.parse(raw):null;
+  return value&&typeof value==='object'&&!Array.isArray(value)?value:null;
+ }catch(_){return null;}
+}
+function restorePublishedLayout(){
+ if(!publishedLayout||!applyBuildPayload(publishedLayout)){buildStatus.textContent='Published layout unavailable. Try reloading.';return;}
+ layoutMode='published';layoutDirty=false;buildHistory.length=0;
+ buildTileActions.style.display='none';buildRefreshOptions();if(buildSelected)buildRefresh();
+ buildStatus.textContent='✓ Viewing published world · same arrangement as every visitor.';
+}
+function restoreSavedDraft(){
+ if(!layoutReady||!publishedLayout){buildStatus.textContent='Published world is still loading.';return;}
+ const draft=storedBuildDraft();
+ if(!draft){buildStatus.textContent='No saved draft on this device yet.';return;}
+ // Start from published world, then explicitly overlay saved personal changes.
+ applyBuildPayload(publishedLayout);
+ let count=0;
+ for(const [id,p] of Object.entries(draft)){
+  if(!buildRanges[id]||!p||!Number.isInteger(p.dx)||!Number.isInteger(p.dz)||!Number.isInteger(p.rot))continue;
+  if(Math.abs(p.dx)>80||Math.abs(p.dz)>80||!buildValidate(id,p))continue;
+  if(setBuildTransform(id,{dx:p.dx,dz:p.dz,rot:p.rot,...(buildRanges[id].category==='Tile'?{deleted:!!p.deleted}:{})}))count++;
+ }
+ layoutMode='draft';layoutDirty=false;buildHistory.length=0;
+ buildTileActions.style.display='none';buildRefreshOptions();if(buildSelected)buildRefresh();
+ buildStatus.textContent='↺ Restored '+count+' draft entries. Not published to visitors.';
+}
+async function loadSharedLayout(){
+ layoutReady=false;
+ try{
+  const response=await fetch('./world-layout.json?revision='+Date.now(),{cache:'no-store'});
+  if(!response.ok)throw Error('HTTP '+response.status);
+  const data=await response.json();
+  if(!validateBuildPayload(data))throw Error('Invalid published world layout');
+  publishedLayout=data;
+  layoutReady=true;
+  restorePublishedLayout();
+  if(creatorMode&&storedBuildDraft())buildStatus.textContent='✓ Published world loaded. Tap My draft only if you want older unpublished edits.';
+ }catch(err){
+  console.error('Failed to load shared world',err);
+  buildStatus.textContent='Shared world could not load. Check connection and reload.';
+  // Keep the default scene playable, but do not edit/export unsynchronised world.
+ }
+}
+resetBuildGeometry();
 buildRefreshOptions();
+loadSharedLayout();
 
 function selectPathTileAt(clientX,clientY){
  if(!buildMode||!creatorMode)return false;
@@ -2216,6 +2266,7 @@ buildPanel.addEventListener('click',event=>{
 });
 function toggleBuild(force){
  if(!creatorMode)return;
+ if(!layoutReady){showToast('World layout is still loading. Try again shortly.');return;}
  buildMode=typeof force==='boolean'?force:!buildMode;
  buildTileActions.style.display='none';
  buildPanel.style.display=buildMode?'block':'none';
@@ -2228,7 +2279,7 @@ function toggleBuild(force){
   keys={};axis=[0,0];
   buildStatus.textContent='Walk with joystick or WASD; drag to look around. Tap paths to select.';
  }else{
-  buildSave();keys={};
+  if(layoutDirty)buildSave();keys={};
  }
 }
 document.getElementById('buildToggle').addEventListener('click',()=>toggleBuild());
@@ -2579,7 +2630,7 @@ function updateAtmosphere(date,dt){
 }
 
 function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}if(desktopMenuOpen||boardIsOpen||storageOpen){forward=0;right=0;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;seatEyePosition=null;seatExitPosition=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=world.tentSleeping||seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=((seatedAt&&seatEyePosition?seatEyePosition[1]:walkingHeight(camera[0],camera[2])+(world.tentSleeping?.85:eyeHeight))-camera[1])*.20;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v4.8 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v4.9 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
