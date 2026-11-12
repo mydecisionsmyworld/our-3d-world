@@ -95,18 +95,21 @@
 .board-comments p{font-size:12px;margin:4px 0}
 #boardStatus{font-size:12px;margin:8px 0;color:#f2dca6}
 #boardComposeCounter{font-size:11px;color:#bfcfbd}
-/* Desktop proximity shows an E prompt only. The full menu pauses mouse-look. */
+/* Compact proximity prompt for everyone. Full interaction menus open on demand. */
 .interaction-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
 #interactionClose{padding:7px 11px;font-size:12px;cursor:pointer;background:#426a49}
-@media(hover:hover) and (pointer:fine){
- #interaction[data-desktop-prompt="1"]{bottom:18%;max-width:310px;text-align:center;pointer-events:none;padding:9px 13px;background:#123a35d9}
- #interaction[data-desktop-prompt="1"] .interaction-top{justify-content:center}
- #interaction[data-desktop-prompt="1"] #interactionInfo,
- #interaction[data-desktop-prompt="1"] #interactionActions,
- #interaction[data-desktop-prompt="1"] #cookerSlot,
- #interaction[data-desktop-prompt="1"] #chopProgress{display:none!important}
- #interaction[data-desktop-open="1"]{pointer-events:auto;bottom:115px;max-height:min(64vh,610px);overflow-y:auto}
-}
+#interaction[data-desktop-prompt="1"]{bottom:max(166px,calc(env(safe-area-inset-bottom) + 153px));max-width:238px;text-align:center;padding:8px 11px;background:rgba(17,47,40,.86);pointer-events:auto;box-shadow:0 3px 14px #0005;z-index:7}
+#interaction[data-desktop-prompt="1"] .interaction-top{justify-content:center}
+#interaction[data-desktop-prompt="1"] #interactionName{font-size:12px}
+#interaction[data-desktop-prompt="1"] #interactionOpen{display:block!important;margin:6px auto 0;background:#466b51;border:1px solid #a6c9a4;padding:8px 11px;border-radius:8px;font-size:12px;min-height:34px}
+#interaction[data-desktop-prompt="1"] #interactionInfo,
+#interaction[data-desktop-prompt="1"] #interactionActions,
+#interaction[data-desktop-prompt="1"] #cookerSlot,
+#interaction[data-desktop-prompt="1"] #fireSlot,
+#interaction[data-desktop-prompt="1"] #chopProgress{display:none!important}
+#interaction[data-desktop-open="1"]{pointer-events:auto;bottom:max(115px,calc(env(safe-area-inset-bottom) + 99px));max-height:min(64vh,610px);overflow-y:auto;z-index:8}
+body.build-active #interaction{display:none!important}
+#buildPlacementMarker{position:absolute;z-index:22;transform:translate(-50%,-50%);width:24px;height:24px;border:1.5px solid #dcf9b9;border-radius:50%;background:rgba(24,55,39,.38);box-shadow:0 0 0 2px #133d3999;color:#e4ffb6;text-align:center;line-height:20px;font:bold 22px system-ui;pointer-events:none}
 #buildPanel{position:absolute;z-index:24;right:12px;bottom:max(195px,calc(env(safe-area-inset-bottom) + 164px));width:min(310px,calc(100vw - 24px));max-height:min(65vh,600px);overflow-y:auto;background:rgba(22,43,36,.96);border:1px solid #b9d9b288;border-radius:15px;padding:12px;color:#f3f7ef;font-size:12px;box-shadow:0 7px 26px #0007;touch-action:pan-y}
 #buildPanel .buildHead{display:flex;align-items:center;justify-content:space-between;font-size:14px}
 #buildPanel .buildHead button{padding:5px 10px}
@@ -169,10 +172,10 @@ body.build-active #buttons{bottom:auto;top:max(49px,calc(env(safe-area-inset-top
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v5.2</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v5.3</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
 <div id="sunMoon" aria-hidden="true"></div><canvas id="weatherFX" aria-hidden="true"></canvas>
 <div id="worldWeather" aria-live="off"><div class="weatherClockRow"><span id="gmtClock" class="weatherClock">--:--:-- GMT</span><span id="currentWeatherIcon" class="weatherIcon" role="img" aria-label="Weather loading" title="Weather loading">⏳</span></div><div id="weatherDate" class="weatherDetail">Bournemouth · synchronising</div><div id="weatherNow" class="weatherDetail">Connecting to weather forecast…</div><div id="weatherTomorrow" class="weatherDetail"></div><div class="weatherDetail"><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" style="pointer-events:auto;color:inherit;text-decoration:underline">Weather: Open-Meteo</a></div></div>
-<div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div><div id="buildLookSurface" aria-label="Drag to look around or tap a path tile" style="display:none"></div>
+<div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div><div id="buildPlacementMarker" aria-hidden="true" style="display:none">＋</div><div id="buildLookSurface" aria-label="Drag to look around or tap a path tile" style="display:none"></div>
 <div id="pad" aria-label="Movement joystick"><div id="knob"></div></div>
 <div id="buttons"><button id="eat" style="display:none;background:#45673c">F · Eat</button><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button><button id="buildToggle" type="button">▦ Build mode</button></div><div id="buildPanel" role="region" aria-label="World layout editor" style="display:none">
   <div class="buildPicker">
@@ -197,7 +200,7 @@ body.build-active #buttons{bottom:auto;top:max(49px,calc(env(safe-area-inset-top
   <div id="buildTileActions" aria-label="Selected path tile" style="display:none"><button type="button" id="buildTileEdit">✎ Edit</button><button type="button" id="buildTileRemove">🗑 Delete</button></div>
   <div class="buildFeedback" id="buildStatus" role="status">1 m grid · Local draft. Published layouts are shared with everyone.</div>
  </div><div id="hotbar" aria-label="Five inventory slots"></div><div id="dragGhost" aria-hidden="true"></div>
-<section id="interaction" aria-live="polite"><div class="interaction-top"><strong id="interactionName"></strong><button id="interactionClose" type="button" style="display:none" aria-label="Close interaction menu">✕ Close</button></div><p id="interactionInfo"></p><div id="cookerSlot" style="display:none;margin:8px 0;padding:9px;border:1px solid #a7b39a;border-radius:8px;background:#284b39"></div><div id="fireSlot" style="display:none;margin:8px 0;padding:9px;border:1px solid #a7b39a;border-radius:8px;background:#284b39"></div><div id="interactionActions"></div><div id="chopProgress"><div id="chopFill"></div></div></section><div id="toast" role="status"></div>
+<section id="interaction" aria-live="polite"><div class="interaction-top"><strong id="interactionName"></strong><button id="interactionClose" type="button" style="display:none" aria-label="Close interaction menu">✕ Close</button></div><button id="interactionOpen" type="button" style="display:none">Tap to interact</button><p id="interactionInfo"></p><div id="cookerSlot" style="display:none;margin:8px 0;padding:9px;border:1px solid #a7b39a;border-radius:8px;background:#284b39"></div><div id="fireSlot" style="display:none;margin:8px 0;padding:9px;border:1px solid #a7b39a;border-radius:8px;background:#284b39"></div><div id="interactionActions"></div><div id="chopProgress"><div id="chopFill"></div></div></section><div id="toast" role="status"></div>
 <div id="storageOverlay" role="dialog" aria-modal="true" aria-label="Storage inventory">
  <div id="storageWindow">
   <div class="storage-head"><h2 id="storageTitle">Storage</h2><button type="button" id="storageClose" aria-label="Close storage">×</button></div>
@@ -1599,7 +1602,7 @@ function advanceChopping(now){
  }else showToast('Inventory full: no wood collected.');
  nearby=null;updateNearby();renderInteraction();
 }
-const interact=document.getElementById('interaction'),iname=document.getElementById('interactionName'),
+const interact=document.getElementById('interaction'),interactionOpen=document.getElementById('interactionOpen'),iname=document.getElementById('interactionName'),
 iinfo=document.getElementById('interactionInfo'),iactions=document.getElementById('interactionActions'),
 toast=document.getElementById('toast');
 let nearby=null,desktopMenuOpen=false;
@@ -1620,25 +1623,28 @@ function closeDesktopInteraction(capture=true){
  if(capture)captureDesktopMouse();
 }
 function openDesktopInteraction(){
- if(!desktopMode()||!nearby||fly||boardIsOpen||storageOpen)return;
+ if(!nearby||fly||boardIsOpen||storageOpen||buildMode)return;
  desktopMenuOpen=true;
  keys={};
  releaseDesktopMouse();
  renderInteraction();
 }
 document.getElementById('interactionClose').addEventListener('click',()=>closeDesktopInteraction(true));
+interactionOpen.addEventListener('click',()=>openDesktopInteraction());
 function showToast(message){toast.textContent=message;toast.style.display='block';toast.dataset.until=String(performance.now()+2400);}
 function renderInteraction(){
- if(!nearby||fly||boardIsOpen||storageOpen){
+ if(buildMode||!nearby||fly||boardIsOpen||storageOpen){
   interact.style.display='none';return;
  }
  const obj=resolveObject(nearby);
  if(!obj){interact.style.display='none';return;}
- const prompt=desktopMode()&&!desktopMenuOpen;
+ const prompt=!desktopMenuOpen;
  interact.dataset.desktopPrompt=prompt?'1':'0';
- interact.dataset.desktopOpen=desktopMode()&&desktopMenuOpen?'1':'0';
- document.getElementById('interactionClose').style.display=desktopMode()&&desktopMenuOpen?'block':'none';
- interact.style.display='block';iname.textContent=prompt?'[ E ] '+obj.name:obj.name;
+ interact.dataset.desktopOpen=desktopMenuOpen?'1':'0';
+ document.getElementById('interactionClose').style.display=desktopMenuOpen?'block':'none';
+ interactionOpen.style.display=prompt?'block':'none';
+ interactionOpen.textContent=desktopMode()?'E to interact':'Tap to interact';
+ interact.style.display='block';iname.textContent=obj.name;
  if(prompt){iactions.replaceChildren();return;}
  const cookerSlot=document.getElementById('cookerSlot');
  cookerSlot.style.display='none';cookerSlot.style.whiteSpace='pre-line';
@@ -1669,10 +1675,10 @@ function renderInteraction(){
    b.addEventListener('click',()=>{
     const result=performAction(obj.id,action.id);
     if(!result.ok||!['chop','open','openBoard'].includes(action.id))showToast(result.message);
-    if(desktopMode()&&result.ok&&['open','openBoard'].includes(action.id)){
+    if(result.ok&&['open','openBoard'].includes(action.id)){
       desktopMenuOpen=false;
     }
-    if(desktopMode()&&result.ok&&['sit','stand','hunt'].includes(action.id)){
+    if(result.ok&&['sit','stand','hunt'].includes(action.id)){
       closeDesktopInteraction(true);
     }else{updateNearby();renderInteraction();}
    });
@@ -1680,12 +1686,16 @@ function renderInteraction(){
  }
 }
 function updateNearby(){
+ if(buildMode){
+  if(desktopMenuOpen)desktopMenuOpen=false;
+  nearby=null;interact.style.display='none';return;
+ }
  if(seatedAt){if(nearby!==seatedAt){nearby=seatedAt;renderInteraction();}return;}
  if(world.tentSleeping){
   if(nearby!=='tent'){nearby='tent';renderInteraction();}
   return;
  }
- if(desktopMode()&&desktopMenuOpen)return;
+ if(desktopMenuOpen)return;
  if(chopJob){if(nearby!==chopJob.id){nearby=chopJob.id;renderInteraction();}return;}
  let best=null,bestDist=Infinity;
  if(!fly)for(const o of usable){
@@ -1920,6 +1930,7 @@ const BUILD_STORAGE='woodland-camp-build-layout-v2',BUILD_GRID=1;
 const creatorMode=new URLSearchParams(location.search).get('creator')==='1';
 document.getElementById('buildToggle').style.display=creatorMode?'':'none';
 const buildPanel=document.getElementById('buildPanel');
+const buildPlacementMarker=document.getElementById('buildPlacementMarker');
 const buildLookSurface=document.getElementById('buildLookSurface');
 const buildSelect=document.getElementById('buildObject');
 const buildCoords=document.getElementById('buildCoords');
@@ -2086,17 +2097,49 @@ function buildRefreshOptions(){
  if(buildRanges[buildSelected]?.category==='Object')buildSelect.value=buildSelected;
  else buildSelect.selectedIndex=-1;
 }
+
+let buildAimPoint=null;
+function updateBuildPlacementMarker(){
+ const x=buildAimPoint?.x??innerWidth/2,y=buildAimPoint?.y??innerHeight/2;
+ buildPlacementMarker.style.left=x+'px';buildPlacementMarker.style.top=y+'px';
+}
+function setBuildAim(x,y){
+ if(!buildMode)return;
+ buildAimPoint={x:Math.max(0,Math.min(innerWidth,x)),y:Math.max(0,Math.min(innerHeight,y))};
+ updateBuildPlacementMarker();
+}
+// Ray cast against the actual procedural height field. On mobile the central
+// crosshair is used until the creator taps a specific ground square.
+function buildGroundTarget(){
+ const rect=canvas.getBoundingClientRect();
+ const px=buildAimPoint?.x??(rect.left+rect.width/2),py=buildAimPoint?.y??(rect.top+rect.height/2);
+ const sx=(px-rect.left)/rect.width*2-1,sy=1-(py-rect.top)/rect.height*2;
+ const tan=Math.tan(1.12*(coarsePointer.matches?1.15:1)/2),aspect=rect.width/rect.height;
+ const cp=Math.cos(pitch),sp=Math.sin(pitch),cy=Math.cos(yaw),sn=Math.sin(yaw);
+ const dx=sn*cp+cy*sx*tan*aspect-sn*sp*sy*tan;
+ const dy=sp+cp*sy*tan;
+ const dz=-cy*cp+sn*sx*tan*aspect+cy*sp*sy*tan;
+ const n=Math.hypot(dx,dy,dz),rx=dx/n,ry=dy/n,rz=dz/n;
+ if(ry>=-.008)return null;
+ for(let t=.3;t<=68;t+=.24){
+  const x=camera[0]+rx*t,z=camera[2]+rz*t,y=camera[1]+ry*t;
+  if(y<=ground(x,z)+.075){
+   return {x:Math.round(x/BUILD_GRID)*BUILD_GRID,z:Math.round(z/BUILD_GRID)*BUILD_GRID};
+  }
+ }
+ return null;
+}
 function buildAddTile(){
  const entry=Object.entries(buildRanges).find(([id,r])=>r.category==='Tile'&&buildStates[id]?.deleted!==false);
  if(!entry){buildStatus.textContent='Tile limit reached. Delete unused tiles to free space.';return;}
- const [id,r]=entry,step=3;
- const x=Math.round(camera[0]-Math.sin(yaw)*step),z=Math.round(camera[2]-Math.cos(yaw)*step);
- const newState={dx:x,dz:z,rot:0,deleted:false};
+ const [id,r]=entry,target=buildGroundTarget();
+ if(!target){buildStatus.textContent='Aim the cursor or centre crosshair at a ground square, then tap + Path tile.';return;}
+ const newState={dx:target.x,dz:target.z,rot:0,deleted:false};
  if(!buildValidate(id,newState)){buildStatus.textContent='Look towards clear, level ground to add a tile.';return;}
  const old={...(buildStates[id]||{dx:0,dz:0,rot:0,deleted:true})};
  buildHistory.push({id,state:old});
  setBuildTransform(id,newState);layoutDirty=true;layoutMode='draft';buildSelectItem(id);buildTileActions.style.display='none';
- buildStatus.textContent='Added path tile '+(Number(id.slice(5))+1)+'. Move it or delete it anytime.';
+ buildStatus.textContent='Added tile at grid X '+target.x+', Z '+target.z+'. Move or delete it anytime.';
 }
 function buildDeleteTile(){
  if(!buildSelected||buildRanges[buildSelected]?.category!=='Tile'){buildStatus.textContent='Select a path tile before deleting.';return;}
@@ -2285,6 +2328,7 @@ buildLookSurface.addEventListener('pointerdown',e=>{
  buildLookSurface.classList.add('dragging');
 });
 buildLookSurface.addEventListener('pointermove',e=>{
+ if(buildMode&&e.pointerType==='mouse'&&!buildLookDrag)setBuildAim(e.clientX,e.clientY);
  if(!buildMode||!buildLookDrag||buildLookDrag.id!==e.pointerId)return;
  const dx=e.clientX-buildLookDrag.lastX,dy=e.clientY-buildLookDrag.lastY;
  buildLookDrag.moved+=Math.hypot(dx,dy);
@@ -2299,7 +2343,7 @@ function finishBuildLook(e,cancelled=false){
  const tap=!cancelled&&buildLookDrag.moved<10&&Math.hypot(e.clientX-buildLookDrag.x,e.clientY-buildLookDrag.y)<10;
  buildLookDrag=null;
  buildLookSurface.classList.remove('dragging');
- if(tap)selectPathTileAt(e.clientX,e.clientY);
+ if(tap){setBuildAim(e.clientX,e.clientY);selectPathTileAt(e.clientX,e.clientY);}else if(e.pointerType==='mouse')setBuildAim(e.clientX,e.clientY);
 }
 buildLookSurface.addEventListener('pointerup',e=>finishBuildLook(e));
 buildLookSurface.addEventListener('pointercancel',e=>finishBuildLook(e,true));
@@ -2313,15 +2357,19 @@ function toggleBuild(force){
  if(!creatorMode)return;
  if(!layoutReady){showToast('World layout is still loading. Try again shortly.');return;}
  buildMode=typeof force==='boolean'?force:!buildMode;
+ buildAimPoint=null;
  buildTileActions.style.display='none';
  buildLookDrag=null;buildLookSurface.classList.remove('dragging');
  buildPanel.style.display=buildMode?'block':'none';
  buildLookSurface.style.display=buildMode?'block':'none';
+ buildPlacementMarker.style.display=buildMode?'block':'none';
+ if(buildMode)updateBuildPlacementMarker();
  document.body.classList.toggle('build-active',buildMode);
  document.getElementById('buildToggle').textContent=buildMode?'✓ Finish building':'▦ Build mode';
  if(buildMode){
   if(document.pointerLockElement===canvas)document.exitPointerLock?.();
   if(desktopMenuOpen)closeDesktopInteraction(false);
+  nearby=null;interact.style.display='none';
   if(!buildSelected)buildSelectItem('fire');
   keys={};axis=[0,0];
   buildStatus.textContent='Drag anywhere in the world to look around; use joystick or WASD to walk. Tap paths to select.';
@@ -2400,7 +2448,7 @@ window.addEventListener('keydown',e=>{
   return;
  }
  // E opens a clickable action menu, never silently activates the first action.
- if(desktopMode()&&e.code==='KeyE'){
+ if(e.code==='KeyE'){
   e.preventDefault();
   if(e.repeat)return;
   if(desktopMenuOpen)closeDesktopInteraction(true);
@@ -2425,16 +2473,6 @@ window.addEventListener('keydown',e=>{
   e.preventDefault();if(!e.repeat)eatSelectedFood();return;
  }
  if(e.code==='KeyG'){document.getElementById('fly').click();e.preventDefault();}
- // Preserve the original quick interaction for non-desktop keyboard users.
- if(e.code==='KeyE'&&nearby&&!fly){
-  const action=availableActions(nearby).find(a=>!a.disabled);
-  if(action){
-   const result=performAction(nearby,action.id);
-   if(!result.ok||!['chop','open','openBoard'].includes(action.id))showToast(result.message);
-   updateNearby();renderInteraction();
-  }
-  e.preventDefault();
- }
 });
 window.addEventListener('keyup',e=>{keys[e.code]=false;});
 window.addEventListener('blur',()=>{axis=[0,0];keys={};knob.style.transform='translate(0,0)';});
@@ -2677,7 +2715,7 @@ function updateAtmosphere(date,dt){
 }
 
 function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}if(desktopMenuOpen||boardIsOpen||storageOpen){forward=0;right=0;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;seatEyePosition=null;seatExitPosition=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=world.tentSleeping||seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=((seatedAt&&seatEyePosition?seatEyePosition[1]:walkingHeight(camera[0],camera[2])+(world.tentSleeping?.85:eyeHeight))-camera[1])*.20;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v5.2 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&desktopMenuOpen&&!buildMode)renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v5.3 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
