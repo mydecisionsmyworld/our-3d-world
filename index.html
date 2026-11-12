@@ -2124,7 +2124,7 @@ function applyBuildPayload(data){
 // Published GitHub file is the public source of truth; editor may keep a local draft.
 for(const [id,r] of Object.entries(buildRanges))if(r.category==='Tile')setBuildTransform(id,{dx:0,dz:0,rot:0,deleted:true});
 const localDraft=creatorMode?(()=>{
- try{return JSON.parse(localStorage.getItem(BUILD_STORAGE)||'null');}catch(_){return null;}
+ try{return JSON.parse(localStorage.getItem(BUILD_STORAGE)||localStorage.getItem('woodland-camp-build-layout-v1')||'null');}catch(_){return null;}
 })():null;
 fetch('./world-layout.json?sync='+Math.floor(Date.now()/60000),{cache:'no-store'})
  .then(r=>{if(!r.ok)throw Error('Shared layout '+r.status);return r.json();})
