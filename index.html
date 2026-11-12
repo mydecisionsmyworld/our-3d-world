@@ -107,6 +107,19 @@
  #interaction[data-desktop-prompt="1"] #chopProgress{display:none!important}
  #interaction[data-desktop-open="1"]{pointer-events:auto;bottom:115px;max-height:min(64vh,610px);overflow-y:auto}
 }
+#buildPanel{position:absolute;z-index:24;right:12px;bottom:max(195px,calc(env(safe-area-inset-bottom) + 164px));width:min(310px,calc(100vw - 24px));max-height:min(65vh,600px);overflow-y:auto;background:rgba(22,43,36,.96);border:1px solid #b9d9b288;border-radius:15px;padding:12px;color:#f3f7ef;font-size:12px;box-shadow:0 7px 26px #0007;touch-action:pan-y}
+#buildPanel .buildHead{display:flex;align-items:center;justify-content:space-between;font-size:14px}
+#buildPanel .buildHead button{padding:5px 10px}
+#buildPanel .buildIntro,#buildPanel .buildFoot{font-size:11px;color:#d2e2d0;line-height:1.4;margin:7px 0}
+#buildPanel label{display:block;font-weight:700;margin:8px 0 4px}
+#buildObject{display:block;width:100%;padding:10px 7px;border:1px solid #b2c4a8;background:#eaf1e6;color:#173124;border-radius:8px;font:12px system-ui}
+#buildCoords{font:11px ui-monospace,monospace;color:#dce7d5;margin:10px 0;text-align:center}
+#buildPanel .buildMove{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:7px auto;width:172px}
+#buildPanel .buildMove button{min-height:40px;font-size:18px;padding:7px}
+#buildPanel .buildRow{display:flex;gap:6px;margin-top:7px}
+#buildPanel .buildRow button{flex:1;padding:10px 6px;font-size:11px}
+#buildPanel .buildSave{background:#3d7653}
+@media(max-height:670px){#buildPanel{bottom:max(104px,env(safe-area-inset-bottom));max-height:70vh}}
 /* Minimal display: only a small Greenwich Mean Time clock and live weather icon at the top. */
 #hud,#guide,#diag{display:none !important}
 #worldWeather{top:max(10px,calc(env(safe-area-inset-top) + 7px));left:50%;transform:translateX(-50%);max-width:none;width:max-content;line-height:1;z-index:6}
@@ -117,12 +130,25 @@
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v4.0</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v4.1</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
 <div id="sunMoon" aria-hidden="true"></div><canvas id="weatherFX" aria-hidden="true"></canvas>
 <div id="worldWeather" aria-live="off"><div class="weatherClockRow"><span id="gmtClock" class="weatherClock">--:--:-- GMT</span><span id="currentWeatherIcon" class="weatherIcon" role="img" aria-label="Weather loading" title="Weather loading">⏳</span></div><div id="weatherDate" class="weatherDetail">Bournemouth · synchronising</div><div id="weatherNow" class="weatherDetail">Connecting to weather forecast…</div><div id="weatherTomorrow" class="weatherDetail"></div><div class="weatherDetail"><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" style="pointer-events:auto;color:inherit;text-decoration:underline">Weather: Open-Meteo</a></div></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
 <div id="pad" aria-label="Movement joystick"><div id="knob"></div></div>
-<div id="buttons"><button id="eat" style="display:none;background:#45673c">F · Eat</button><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button></div><div id="hotbar" aria-label="Five inventory slots"></div><div id="dragGhost" aria-hidden="true"></div>
+<div id="buttons"><button id="eat" style="display:none;background:#45673c">F · Eat</button><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button><button id="buildToggle" type="button">▦ Build mode</button></div><div id="buildPanel" role="region" aria-label="World layout editor" style="display:none">
+ <div class="buildHead"><strong>▦ Arrange woodland</strong><button id="buildClose" type="button" aria-label="Close build mode">✕</button></div>
+ <p class="buildIntro">Choose an object or path section. Move by one invisible 1 m grid square, rotate, then save.</p>
+ <label for="buildObject">Pick up</label><select id="buildObject"></select>
+ <div id="buildCoords">Choose an item to move</div>
+ <div class="buildMove">
+ <span></span><button type="button" data-build="north">▲</button><span></span>
+ <button type="button" data-build="west">◀</button><button type="button" data-build="south">▼</button><button type="button" data-build="east">▶</button>
+ </div>
+ <div class="buildRow"><button type="button" data-build="rotate-left">↶ Rotate</button><button type="button" data-build="rotate-right">Rotate ↷</button></div>
+ <div class="buildRow"><button type="button" data-build="nearby">Pick nearest</button><button type="button" data-build="undo">↶ Undo</button></div>
+ <div class="buildRow"><button type="button" data-build="save" class="buildSave">✓ Save layout</button><button type="button" data-build="reset">Reset selected</button></div>
+ <p class="buildFoot" id="buildStatus">Changes save on this device. World positions snap to 1 m steps.</p>
+ </div><div id="hotbar" aria-label="Five inventory slots"></div><div id="dragGhost" aria-hidden="true"></div>
 <section id="interaction" aria-live="polite"><div class="interaction-top"><strong id="interactionName"></strong><button id="interactionClose" type="button" style="display:none" aria-label="Close interaction menu">✕ Close</button></div><p id="interactionInfo"></p><div id="cookerSlot" style="display:none;margin:8px 0;padding:9px;border:1px solid #a7b39a;border-radius:8px;background:#284b39"></div><div id="fireSlot" style="display:none;margin:8px 0;padding:9px;border:1px solid #a7b39a;border-radius:8px;background:#284b39"></div><div id="interactionActions"></div><div id="chopProgress"><div id="chopFill"></div></div></section><div id="toast" role="status"></div>
 <div id="storageOverlay" role="dialog" aria-modal="true" aria-label="Storage inventory">
  <div id="storageWindow">
@@ -645,8 +671,19 @@ function paveGravelTrail(route,ri){
   gravelTile(v[k][band],v[k+1][band],v[k+1][band+1],v[k][band+1],ri*1500+k*3+band,band===0||band===2);
 }
 // Generate after the forest and camp groups, preserving the original woodland layout.
+const buildPathGroups={};
+let pathStart=positions.length/3;
 paveGravelCircle();
-for(let i=0;i<campFootpaths.length;i++)paveGravelTrail(campFootpaths[i],i);
+buildPathGroups['path-courtyard']={startV:pathStart,endV:positions.length/3,name:'Central gravel courtyard',x:campGravelCentre[0],z:campGravelCentre[1]};
+for(let i=0;i<campFootpaths.length;i++){
+ const route=campFootpaths[i];
+ for(let j=1;j<route.points.length;j++){
+  pathStart=positions.length/3;
+  paveGravelTrail({width:route.width,points:[route.points[j-1],route.points[j]]},i*13+j);
+  const a=route.points[j-1],b=route.points[j];
+  buildPathGroups['path-'+i+'-'+j]={startV:pathStart,endV:positions.length/3,name:route.name+' · section '+j,x:(a[0]+b[0])*.5,z:(a[1]+b[1])*.5};
+ }
+}
 // A scattering of flat stones and small earth flecks adds scale without collision.
 for(let i=0;i<670;i++){
  const x=(rnd(i*23+701)-.5)*34,z=(rnd(i*41+911)-.5)*36;
@@ -719,6 +756,7 @@ for(const t of [.2,.55,.9]){
  }
 }
 // Compact cooking station next to the dining bench, with a reusable camp spear.
+beginCampGroup('cook');
 const cookX=13.1,cookZ=-8.8;
 for(let i=0;i<9;i++){const a=i*Math.PI*2/9;box(cookX+Math.cos(a)*.93,.015,cookZ+Math.sin(a)*.93,.52,.32,.42,[.43,.44,.40]);}
 box(cookX,.13,cookZ,1.35,.17,1.15,[.27,.27,.25]);
@@ -737,6 +775,7 @@ metalBand(cookX,1.30,cookZ+.62,1.52,.07,.06);
 for(let i=0;i<5;i++)timber(cookX-.5+i*.23,.27,cookZ,1.05,.095,'z',i+55);
 for(let i=0;i<4;i++)plank(cookX+1.8,1.07,cookZ-.40+i*.27,1.90,.23,60+i);
 box(cookX+1.8,1.21,cookZ+.47,.7,.055,.28,[.22,.23,.22]);
+endCampGroup('cook');
 
 // Large rocks are genuine obstacles; tiny stones and sticks above are not.
 for(let i=0;i<14;i++){
@@ -1833,6 +1872,185 @@ document.getElementById('boardOwnerSave').addEventListener('click',async()=>{
  }
 });
 
+
+// WOODLAND BUILD MODE. Geometry is based on an immutable copy of the original
+// mesh, so repositioning preserves its shape, normals and collision/interaction.
+const BUILD_STORAGE='woodland-camp-build-layout-v1',BUILD_GRID=1;
+const buildPanel=document.getElementById('buildPanel');
+const buildSelect=document.getElementById('buildObject');
+const buildCoords=document.getElementById('buildCoords');
+const buildStatus=document.getElementById('buildStatus');
+const buildRanges={},buildStates={},buildHistory=[];
+let buildMode=false,buildSelected='';
+const buildNames={
+ tent:'Canvas tent',fire:'Campfire and fire ring',dining:'Dining table and benches',
+ supplies:'Supply crates',barrel:'Water barrel',seat1:'Fireplace log seat',
+ seat2:'Woodland log seat',board:'Message board',sign:'Camp signpost',
+ shower:'Shower block',axe:'Chopping station',rack:'Wood rack',cook:'Cooking station'
+};
+const buildObjectToGroup={};
+for(const key of Object.keys(campGroupRanges)){
+ const range=campGroupRanges[key];
+ if(!range||range.endV<=range.startV)continue;
+ const related=usable.filter(o=>(usableGroup[o.id]||o.id)===key);
+ const anchors=related.length?related:[];
+ let x=0,z=0;
+ if(anchors.length){for(const o of anchors){x+=o.x;z+=o.z;}x/=anchors.length;z/=anchors.length;}
+ else{
+  const lo=[Infinity,Infinity],hi=[-Infinity,-Infinity];
+  for(let i=range.startV;i<range.endV;i++){
+   const px=buf[i*9],pz=buf[i*9+2];
+   lo[0]=Math.min(lo[0],px);lo[1]=Math.min(lo[1],pz);
+   hi[0]=Math.max(hi[0],px);hi[1]=Math.max(hi[1],pz);
+  }
+  x=(lo[0]+hi[0])*.5;z=(lo[1]+hi[1])*.5;
+ }
+ buildRanges[key]={...range,x,z,name:buildNames[key]||key,category:'Object'};
+ for(const o of related)buildObjectToGroup[o.id]=key;
+}
+for(const [id,range] of Object.entries(buildPathGroups))buildRanges[id]={...range,category:'Path'};
+const originalBuffer=buf.slice();
+const anchorSnapshots={};
+for(const o of usable){anchorSnapshots[o.id]={x:o.x,z:o.z,w:o.w,d:o.d};}
+const seatSnapshots={};
+for(const [id,a] of Object.entries(seatAnchors)){
+ seatSnapshots[id]={x:a.x,z:a.z,face:[...a.face]};
+}
+const colliderSnapshots={};
+for(const [id,r] of Object.entries(buildRanges)){
+ if(r.startO===undefined)continue;
+ colliderSnapshots[id]=obstacles.slice(r.startO,r.endO).map(o=>({ref:o,x:o.x,z:o.z,w:o.w,d:o.d}));
+}
+const originalGroupAnchors={};
+for(const [id,r] of Object.entries(buildRanges))originalGroupAnchors[id]={x:r.x,z:r.z};
+function buildTransformXZ(x,z,origin,dx,dz,rotation){
+ const a=rotation*Math.PI/2,c=Math.cos(a),q=Math.sin(a),rx=x-origin.x,rz=z-origin.z;
+ return [origin.x+dx+c*rx-q*rz,origin.z+dz+q*rx+c*rz];
+}
+function buildValidate(id,state){
+ if(!buildRanges[id])return false;
+ const range=buildRanges[id],x=range.x+state.dx,z=range.z+state.dz;
+ if(Math.abs(x)>85||Math.abs(z)>85)return false;
+ // Avoid the lake and extremely steep terrain, where flat props float.
+ if(range.category==='Object'){
+  if(Math.hypot(x+55,z+42)<26)return false;
+  if(ground(x,z)>16)return false;
+ }
+ return true;
+}
+function setBuildTransform(id,state){
+ if(!buildValidate(id,state))return false;
+ const range=buildRanges[id],origin=originalGroupAnchors[id],rotation=((state.rot||0)%4+4)%4;
+ // Transform original geometry, never already transformed vertices.
+ const baseY=ground(origin.x,origin.z),targetY=ground(origin.x+state.dx,origin.z+state.dz);
+ const deltaY=range.category==='Path'?0:Math.max(-1.6,Math.min(1.6,targetY-baseY));
+ for(let i=range.startV;i<range.endV;i++){
+  const idx=i*9,x=originalBuffer[idx],y=originalBuffer[idx+1],z=originalBuffer[idx+2];
+  const next=buildTransformXZ(x,z,origin,state.dx,state.dz,rotation);
+  buf[idx]=next[0];buf[idx+2]=next[1];
+  // Paving is re-grounded vertex by vertex to avoid floating slabs.
+  buf[idx+1]=range.category==='Path'?y+ground(next[0],next[1])-ground(x,z):y+deltaY;
+  const normal=buildTransformXZ(originalBuffer[idx+6],originalBuffer[idx+8],{x:0,z:0},0,0,rotation);
+  buf[idx+6]=normal[0];buf[idx+8]=normal[1];
+ }
+ gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+ gl.bufferSubData(gl.ARRAY_BUFFER,range.startV*36,buf.subarray(range.startV*9,range.endV*9));
+ for(const o of colliderSnapshots[id]||[]){
+  const [x,z]=buildTransformXZ(o.x,o.z,origin,state.dx,state.dz,rotation);
+  o.ref.x=x;o.ref.z=z;
+  if(o.ref.kind==='box'){o.ref.w=rotation%2?o.d:o.w;o.ref.d=rotation%2?o.w:o.d;}
+ }
+ for(const o of usable){
+  if((usableGroup[o.id]||o.id)!==id)continue;
+  const base=anchorSnapshots[o.id],[x,z]=buildTransformXZ(base.x,base.z,origin,state.dx,state.dz,rotation);
+  o.x=x;o.z=z;o.w=rotation%2?base.d:base.w;o.d=rotation%2?base.w:base.d;
+ }
+ for(const [seatId,a] of Object.entries(seatAnchors)){
+  if((usableGroup[seatId]||seatId)!==id)continue;
+  const base=seatSnapshots[seatId],[x,z]=buildTransformXZ(base.x,base.z,origin,state.dx,state.dz,rotation);
+  const face=buildTransformXZ(base.face[0],base.face[1],origin,state.dx,state.dz,rotation);
+  a.x=x;a.z=z;a.face=face;
+ }
+ buildStates[id]={dx:state.dx,dz:state.dz,rot:rotation};
+ return true;
+}
+function buildSave(){
+ try{localStorage.setItem(BUILD_STORAGE,JSON.stringify(buildStates));buildStatus.textContent='✓ Layout saved on this device.';return true;}
+ catch(e){buildStatus.textContent='Could not save. Check browser storage permissions.';return false;}
+}
+function buildRefresh(){
+ const r=buildRanges[buildSelected],p=buildStates[buildSelected]||{dx:0,dz:0,rot:0};
+ if(!r)return;
+ buildCoords.textContent='X '+(r.x+p.dx).toFixed(1)+' m · Z '+(r.z+p.dz).toFixed(1)+' m · '+(p.rot*90)+'°';
+}
+function buildSelectItem(id){
+ if(!buildRanges[id])return;
+ buildSelected=id;buildSelect.value=id;buildRefresh();
+ buildStatus.textContent=buildRanges[id].category+' selected. Use arrows to move, rotate to turn.';
+}
+function buildAction(action){
+ if(action==='save'){buildSave();return;}
+ if(action==='undo'){
+  const previous=buildHistory.pop();
+  if(previous){setBuildTransform(previous.id,previous.state);buildSelectItem(previous.id);buildStatus.textContent='Undid last change.';}
+  else buildStatus.textContent='Nothing to undo.';
+  return;
+ }
+ if(action==='nearby'){
+  let choice=null,dist=Infinity;
+  for(const [id,r] of Object.entries(buildRanges)){
+   const p=buildStates[id]||{dx:0,dz:0},d=Math.hypot(camera[0]-(r.x+p.dx),camera[2]-(r.z+p.dz));
+   if(d<dist){dist=d;choice=id;}
+  }
+  if(choice&&dist<14)buildSelectItem(choice);
+  else buildStatus.textContent='Walk closer to an object or choose it from the list.';
+  return;
+ }
+ if(!buildSelected)return;
+ const state=buildStates[buildSelected]||{dx:0,dz:0,rot:0},next={...state};
+ if(action==='north')next.dz-=BUILD_GRID;
+ else if(action==='south')next.dz+=BUILD_GRID;
+ else if(action==='west')next.dx-=BUILD_GRID;
+ else if(action==='east')next.dx+=BUILD_GRID;
+ else if(action==='rotate-left')next.rot=(next.rot+3)%4;
+ else if(action==='rotate-right')next.rot=(next.rot+1)%4;
+ else if(action==='reset'){next.dx=0;next.dz=0;next.rot=0;}
+ else return;
+ if(!buildValidate(buildSelected,next)){buildStatus.textContent='Placement outside the buildable ground. Choose another square.';return;}
+ buildHistory.push({id:buildSelected,state:{...state}});
+ if(buildHistory.length>100)buildHistory.shift();
+ setBuildTransform(buildSelected,next);
+ buildRefresh();buildStatus.textContent='Placement updated. Tap Save layout to keep it.';
+ updateNearby();
+}
+buildSelect.innerHTML='<optgroup label="Camp structures">'+Object.entries(buildRanges).filter(([id,r])=>r.category==='Object').map(([id,r])=>'<option value="'+id+'">'+r.name+'</option>').join('')+'</optgroup>'+
+ '<optgroup label="Paths and gravel sections">'+Object.entries(buildRanges).filter(([id,r])=>r.category==='Path').map(([id,r])=>'<option value="'+id+'">'+r.name+'</option>').join('')+'</optgroup>';
+try{
+ const saved=JSON.parse(localStorage.getItem(BUILD_STORAGE)||'null');
+ if(saved&&typeof saved==='object')for(const [id,state] of Object.entries(saved)){
+  if(buildRanges[id]&&Number.isInteger(state.dx)&&Number.isInteger(state.dz)&&Number.isInteger(state.rot)&&Math.abs(state.dx)<=80&&Math.abs(state.dz)<=80)setBuildTransform(id,state);
+ }
+}catch(e){console.warn('Saved build layout invalid',e);}
+buildSelect.addEventListener('change',()=>buildSelectItem(buildSelect.value));
+buildPanel.addEventListener('click',event=>{
+ const button=event.target.closest('button[data-build]');if(button)buildAction(button.dataset.build);
+});
+function toggleBuild(force){
+ buildMode=typeof force==='boolean'?force:!buildMode;
+ buildPanel.style.display=buildMode?'block':'none';
+ document.getElementById('buildToggle').textContent=buildMode?'✓ Finish building':'▦ Build mode';
+ if(buildMode){
+  if(document.pointerLockElement===canvas)document.exitPointerLock?.();
+  if(desktopMenuOpen)closeDesktopInteraction(false);
+  if(!buildSelected)buildSelectItem('fire');
+  keys={};axis=[0,0];
+ }else{
+  buildSave();keys={};
+ }
+}
+document.getElementById('buildToggle').addEventListener('click',()=>toggleBuild());
+document.getElementById('buildClose').addEventListener('click',()=>toggleBuild(false));
+
 let camera=[world.tentSleeping?-11:0,world.tentSleeping?walkingHeight(-11,-8.36)+.85:eyeHeight,world.tentSleeping?-8.36:16],yaw=0,pitch=-.13,fly=false,axis=[0,0],drag=null,keys={},last=performance.now();
 const pad=document.getElementById('pad'),knob=document.getElementById('knob');let padPointer=null;
 function movePad(e){let r=pad.getBoundingClientRect(),dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2),max=r.width*.34,len=Math.hypot(dx,dy);if(len>max){dx*=max/len;dy*=max/len;}axis=[dx/max,-dy/max];knob.style.transform='translate('+dx+'px,'+dy+'px)';}
@@ -1853,13 +2071,13 @@ function desktopGuide(){
 desktopGuide();
 document.addEventListener('pointerlockchange',()=>{drag=null;desktopGuide();});
 document.addEventListener('mousemove',e=>{
- if(document.pointerLockElement!==canvas||boardIsOpen||storageOpen||desktopMenuOpen)return;
+ if(document.pointerLockElement!==canvas||boardIsOpen||storageOpen||desktopMenuOpen||buildMode)return;
  yaw+=e.movementX*.0028;
  pitch=Math.max(-1.15,Math.min(1.15,pitch-e.movementY*.0028));
 });
 canvas.addEventListener('pointerdown',e=>{
  if(finePointer.matches&&e.pointerType==='mouse'){
-  if(e.button===0&&document.pointerLockElement!==canvas&&!boardIsOpen&&!storageOpen&&!desktopMenuOpen){
+  if(e.button===0&&document.pointerLockElement!==canvas&&!boardIsOpen&&!storageOpen&&!desktopMenuOpen&&!buildMode){
    canvas.requestPointerLock?.();
   }
   return;
@@ -1886,6 +2104,7 @@ window.addEventListener('keydown',e=>{
  const tag=document.activeElement?.tagName;
  const typing=tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||document.activeElement?.isContentEditable;
  if(typing)return;
+ if(buildMode){keys={};if(e.code==='Escape'){toggleBuild(false);e.preventDefault();}return;}
  if(boardIsOpen||storageOpen){
   keys={};
   if(e.code==='Escape'){if(boardIsOpen)closeBoard();else closeStorage();e.preventDefault();}
@@ -2166,8 +2385,8 @@ function updateAtmosphere(date,dt){
 
 }
 
-function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}if(desktopMenuOpen||boardIsOpen||storageOpen){forward=0;right=0;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;seatEyePosition=null;seatExitPosition=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=world.tentSleeping||seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=((seatedAt&&seatEyePosition?seatEyePosition[1]:walkingHeight(camera[0],camera[2])+(world.tentSleeping?.85:eyeHeight))-camera[1])*.20;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v4.0 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}if(desktopMenuOpen||boardIsOpen||storageOpen||buildMode){forward=0;right=0;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;seatEyePosition=null;seatExitPosition=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=world.tentSleeping||seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=((seatedAt&&seatEyePosition?seatEyePosition[1]:walkingHeight(camera[0],camera[2])+(world.tentSleeping?.85:eyeHeight))-camera[1])*.20;}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v4.1 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
