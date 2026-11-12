@@ -120,6 +120,35 @@
 #buildPanel .buildRow button{flex:1;padding:10px 6px;font-size:11px}
 #buildPanel .buildSave{background:#3d7653}
 @media(max-height:670px){#buildPanel{bottom:max(104px,env(safe-area-inset-bottom));max-height:70vh}}
+
+/* V4.2: floating edge controls with a transparent, click-through centre. */
+#buildPanel{position:absolute;inset:0;z-index:24;width:auto;height:auto;max-width:none;max-height:none;overflow:visible;background:none;border:0;border-radius:0;padding:0;box-shadow:none;pointer-events:none;touch-action:auto}
+#buildPanel .buildPicker{position:absolute;top:max(47px,calc(env(safe-area-inset-top) + 44px));left:max(10px,env(safe-area-inset-left));right:max(10px,env(safe-area-inset-right));display:flex;gap:5px;align-items:center;pointer-events:auto;background:rgba(21,41,33,.76);border:1px solid #ffffff35;border-radius:12px;padding:6px;max-width:380px;box-shadow:0 3px 14px #0004}
+#buildPanel .buildPicker label{font-size:11px;font-weight:700;white-space:nowrap;margin:0 2px 0 1px}
+#buildPanel #buildObject{flex:1;min-width:0;width:auto;max-width:none;padding:8px 5px;border-radius:7px;font-size:12px}
+#buildPanel .buildPicker button{padding:7px 10px;min-width:32px;font-size:16px}
+#buildPanel .buildControls{position:absolute;right:max(9px,env(safe-area-inset-right));bottom:max(112px,calc(env(safe-area-inset-bottom) + 92px));width:143px;padding:8px;background:rgba(21,41,33,.77);border:1px solid #ffffff35;border-radius:13px;box-shadow:0 3px 15px #0004;pointer-events:auto}
+#buildPanel #buildCoords{font:10px ui-monospace,monospace;color:#e0ece0;margin:0 0 5px;text-align:center;white-space:nowrap}
+#buildPanel .buildMove{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;width:auto;margin:0}
+#buildPanel .buildMove button{min-height:34px;padding:4px 0;font-size:17px;border-radius:8px}
+#buildPanel .buildRow{display:flex;gap:4px;margin-top:5px}
+#buildPanel .buildRow button{flex:1;min-width:0;padding:7px 3px;font-size:10px;border-radius:7px}
+#buildPanel .buildReset{width:100%;padding:5px 3px;margin-top:5px;font-size:10px;background:rgba(28,59,49,.75);border-radius:7px}
+#buildPanel .buildFeedback{position:absolute;left:50%;transform:translateX(-50%);bottom:max(68px,calc(env(safe-area-inset-bottom) + 51px));font-size:10px;line-height:1.3;text-align:center;color:#f2f8ed;max-width:56vw;background:rgba(20,43,36,.65);padding:5px 9px;border-radius:8px;pointer-events:none}
+body.build-active #buttons #fly,body.build-active #buttons #reset,body.build-active #buttons #eat{display:none !important}
+body.build-active #buttons{bottom:auto;top:max(49px,calc(env(safe-area-inset-top) + 46px));right:max(11px,env(safe-area-inset-right));display:none}
+@media(max-width:620px){
+ #buildPanel .buildPicker{max-width:calc(100vw - 20px);top:max(50px,calc(env(safe-area-inset-top) + 44px))}
+ #buildPanel .buildPicker label{font-size:10px}
+ #buildPanel .buildControls{bottom:max(107px,calc(env(safe-area-inset-bottom) + 87px));width:136px}
+ #buildPanel .buildFeedback{bottom:max(75px,calc(env(safe-area-inset-bottom) + 52px));max-width:55vw}
+}
+@media(max-height:520px){
+ #buildPanel .buildPicker{top:max(8px,env(safe-area-inset-top));left:max(175px,calc(env(safe-area-inset-left) + 150px));max-width:calc(100vw - 210px)}
+ #buildPanel .buildControls{bottom:max(10px,env(safe-area-inset-bottom));width:130px;padding:5px}
+ #buildPanel .buildMove button{min-height:28px}
+ #buildPanel .buildFeedback{display:none}
+}
 /* Minimal display: only a small Greenwich Mean Time clock and live weather icon at the top. */
 #hud,#guide,#diag{display:none !important}
 #worldWeather{top:max(10px,calc(env(safe-area-inset-top) + 7px));left:50%;transform:translateX(-50%);max-width:none;width:max-content;line-height:1;z-index:6}
@@ -130,24 +159,29 @@
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v4.1</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v4.2</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
 <div id="sunMoon" aria-hidden="true"></div><canvas id="weatherFX" aria-hidden="true"></canvas>
 <div id="worldWeather" aria-live="off"><div class="weatherClockRow"><span id="gmtClock" class="weatherClock">--:--:-- GMT</span><span id="currentWeatherIcon" class="weatherIcon" role="img" aria-label="Weather loading" title="Weather loading">⏳</span></div><div id="weatherDate" class="weatherDetail">Bournemouth · synchronising</div><div id="weatherNow" class="weatherDetail">Connecting to weather forecast…</div><div id="weatherTomorrow" class="weatherDetail"></div><div class="weatherDetail"><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" style="pointer-events:auto;color:inherit;text-decoration:underline">Weather: Open-Meteo</a></div></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
 <div id="pad" aria-label="Movement joystick"><div id="knob"></div></div>
 <div id="buttons"><button id="eat" style="display:none;background:#45673c">F · Eat</button><button id="fly">✦ Fly mode</button><button id="reset">↺ Reset view</button><button id="buildToggle" type="button">▦ Build mode</button></div><div id="buildPanel" role="region" aria-label="World layout editor" style="display:none">
- <div class="buildHead"><strong>▦ Arrange woodland</strong><button id="buildClose" type="button" aria-label="Close build mode">✕</button></div>
- <p class="buildIntro">Choose an object or path section. Move by one invisible 1 m grid square, rotate, then save.</p>
- <label for="buildObject">Pick up</label><select id="buildObject"></select>
- <div id="buildCoords">Choose an item to move</div>
- <div class="buildMove">
- <span></span><button type="button" data-build="north">▲</button><span></span>
- <button type="button" data-build="west">◀</button><button type="button" data-build="south">▼</button><button type="button" data-build="east">▶</button>
- </div>
- <div class="buildRow"><button type="button" data-build="rotate-left">↶ Rotate</button><button type="button" data-build="rotate-right">Rotate ↷</button></div>
- <div class="buildRow"><button type="button" data-build="nearby">Pick nearest</button><button type="button" data-build="undo">↶ Undo</button></div>
- <div class="buildRow"><button type="button" data-build="save" class="buildSave">✓ Save layout</button><button type="button" data-build="reset">Reset selected</button></div>
- <p class="buildFoot" id="buildStatus">Changes save on this device. World positions snap to 1 m steps.</p>
+  <div class="buildPicker">
+    <label for="buildObject">Move item</label>
+    <select id="buildObject" aria-label="Choose object or path segment"></select>
+    <button type="button" data-build="nearby" title="Select nearest object">⌖</button>
+    <button id="buildClose" type="button" aria-label="Finish building">✓</button>
+  </div>
+  <div class="buildControls">
+    <div id="buildCoords">Select an item</div>
+    <div class="buildMove">
+      <span></span><button type="button" data-build="north" aria-label="Move one metre north">▲</button><span></span>
+      <button type="button" data-build="west" aria-label="Move one metre west">◀</button><button type="button" data-build="south" aria-label="Move one metre south">▼</button><button type="button" data-build="east" aria-label="Move one metre east">▶</button>
+    </div>
+    <div class="buildRow"><button type="button" data-build="rotate-left" title="Rotate left">↶ 90°</button><button type="button" data-build="rotate-right" title="Rotate right">90° ↷</button></div>
+    <div class="buildRow"><button type="button" data-build="undo">↶ Undo</button><button type="button" data-build="save" class="buildSave">✓ Save</button></div>
+    <button class="buildReset" type="button" data-build="reset">Reset selected</button>
+  </div>
+  <div class="buildFeedback" id="buildStatus" role="status">1 m invisible grid · Changes save on this device.</div>
  </div><div id="hotbar" aria-label="Five inventory slots"></div><div id="dragGhost" aria-hidden="true"></div>
 <section id="interaction" aria-live="polite"><div class="interaction-top"><strong id="interactionName"></strong><button id="interactionClose" type="button" style="display:none" aria-label="Close interaction menu">✕ Close</button></div><p id="interactionInfo"></p><div id="cookerSlot" style="display:none;margin:8px 0;padding:9px;border:1px solid #a7b39a;border-radius:8px;background:#284b39"></div><div id="fireSlot" style="display:none;margin:8px 0;padding:9px;border:1px solid #a7b39a;border-radius:8px;background:#284b39"></div><div id="interactionActions"></div><div id="chopProgress"><div id="chopFill"></div></div></section><div id="toast" role="status"></div>
 <div id="storageOverlay" role="dialog" aria-modal="true" aria-label="Storage inventory">
@@ -2038,6 +2072,7 @@ buildPanel.addEventListener('click',event=>{
 function toggleBuild(force){
  buildMode=typeof force==='boolean'?force:!buildMode;
  buildPanel.style.display=buildMode?'block':'none';
+ document.body.classList.toggle('build-active',buildMode);
  document.getElementById('buildToggle').textContent=buildMode?'✓ Finish building':'▦ Build mode';
  if(buildMode){
   if(document.pointerLockElement===canvas)document.exitPointerLock?.();
@@ -2386,7 +2421,7 @@ function updateAtmosphere(date,dt){
 }
 
 function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}if(desktopMenuOpen||boardIsOpen||storageOpen||buildMode){forward=0;right=0;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;seatEyePosition=null;seatExitPosition=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=world.tentSleeping||seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=((seatedAt&&seatEyePosition?seatEyePosition[1]:walkingHeight(camera[0],camera[2])+(world.tentSleeping?.85:eyeHeight))-camera[1])*.20;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v4.1 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v4.2 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
