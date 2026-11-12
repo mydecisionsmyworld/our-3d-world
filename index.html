@@ -117,7 +117,7 @@
 </style></head>
 <body>
 <canvas id="world" aria-label="3D landscape"></canvas>
-<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v3.2</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
+<div id="hud"><h1>WOODLAND CAMP <small style="font-size:12px;color:#fff5bc;font-weight:900">v4.0</small></h1><p>Real-time Bournemouth weather · UK seasons</p></div>
 <div id="sunMoon" aria-hidden="true"></div><canvas id="weatherFX" aria-hidden="true"></canvas>
 <div id="worldWeather" aria-live="off"><div class="weatherClockRow"><span id="gmtClock" class="weatherClock">--:--:-- GMT</span><span id="currentWeatherIcon" class="weatherIcon" role="img" aria-label="Weather loading" title="Weather loading">⏳</span></div><div id="weatherDate" class="weatherDetail">Bournemouth · synchronising</div><div id="weatherNow" class="weatherDetail">Connecting to weather forecast…</div><div id="weatherTomorrow" class="weatherDetail"></div><div class="weatherDetail"><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" style="pointer-events:auto;color:inherit;text-decoration:underline">Weather: Open-Meteo</a></div></div>
 <div id="guide">Drag to look around<br>Move with the joystick</div><div id="reticle"></div>
@@ -160,7 +160,7 @@
 'use strict';
 const diag=document.getElementById('diag');window.addEventListener('error',e=>{diag.textContent='ERROR: '+e.message;diag.style.background='#992323';});const canvas=document.getElementById('world'),status=document.getElementById('status'),gl=canvas.getContext('webgl',{alpha:false,antialias:true,powerPreference:'default'});
 if(!gl){status.textContent='WebGL is unavailable. Try Chrome or Safari.';return;}
-const vert='attribute vec3 p,c,n;uniform mat4 proj,view;uniform vec3 animalShift,sunDir;uniform float animalHeading,daylight,fireGlow,cloudDim,seasonTone;varying vec3 color;varying float fog;void main(){float a=cos(animalHeading),b=sin(animalHeading);vec3 w=vec3(a*p.x+b*p.z,p.y,-b*p.x+a*p.z)+animalShift;vec3 qn=vec3(a*n.x+b*n.z,n.y,-b*n.x+a*n.z);vec4 q=view*vec4(w,1.);gl_Position=proj*q;float sun=max(dot(normalize(qn),normalize(sunDir)),0.);float ember=fireGlow*.54*exp(-length(w.xz-vec2(0.,-1.2))*.20)*max(0.,1.-abs(w.y)*.11);float light=.14+daylight*(.47+.38*sun)*(1.-cloudDim*.31)+ember;vec3 foliage=c;if(c.g>c.r*1.15&&c.g>c.b*1.05&&w.y>1.4){foliage=mix(c,vec3(c.r*.98+.12,c.g*.74,c.b*.57),seasonTone);}color=foliage*light;fog=clamp((-q.z-35.)/165.,0.,.87);}';
+const vert="attribute vec3 p,c,n;uniform mat4 proj,view;uniform vec3 animalShift,sunDir;uniform float animalHeading,daylight,fireGlow,cloudDim,seasonTone,windStrength,windHeading,weatherTime,wetness,snowCover,fogStrength;varying vec3 color;varying float fog;void main(){float a=cos(animalHeading),b=sin(animalHeading);vec3 w=vec3(a*p.x+b*p.z,p.y,-b*p.x+a*p.z)+animalShift;vec3 qn=vec3(a*n.x+b*n.z,n.y,-b*n.x+a*n.z);\nif(c.r>1.5&&c.r<2.6){if(c.g>cloudDim*1.14+.035)w.y=-900.;float drift=sin(weatherTime*.013+p.x*.017+p.z*.009)*min(13.,windStrength*12.);w.x+=cos(windHeading)*drift;w.z+=sin(windHeading)*drift;gl_Position=proj*(view*vec4(w,1.));float brightness=.16+daylight*.85;color=mix(vec3(.31,.34,.38),vec3(.94,.95,.96),1.-cloudDim*.79)*brightness*(.83+.14*c.b);fog=0.;return;}\nif(c.r>2.6){if(wetness<c.g)w.y=-900.;gl_Position=proj*(view*vec4(w,1.));color=vec3(.11,.18,.23)*(1.+daylight*.95);fog=0.;return;}\nbool foliage=c.g>c.r*1.15&&c.g>c.b*1.04;\nif(foliage&&p.y>1.9){float gust=sin(weatherTime*(.65+windStrength*1.5)+p.x*.13+p.z*.18);float flex=min(1.4,max(.0,p.y*.055))*windStrength*(.56+.35*gust);w.x+=cos(windHeading)*flex;w.z+=sin(windHeading)*flex;}\nvec4 q=view*vec4(w,1.);gl_Position=proj*q;float sun=max(dot(normalize(qn),normalize(sunDir)),0.);float ember=fireGlow*.54*exp(-length(w.xz-vec2(0.,-1.2))*.20)*max(0.,1.-abs(w.y)*.11);float light=.14+daylight*(.47+.38*sun)*(1.-cloudDim*.31)+ember;vec3 material=c;\nif(foliage&&w.y>1.4){material=mix(material,vec3(c.r*.98+.12,c.g*.74,c.b*.57),seasonTone);material=mix(material,vec3(.66,.71,.65),snowCover*.45);}\nif(qn.y>.72&&c.g>c.r*.85&&c.g>c.b*.83){material=mix(material,material*.59+vec3(.025,.04,.055),wetness*.47);material=mix(material,vec3(.83,.87,.89),snowCover*.87);}\ncolor=material*light;fog=clamp((-q.z-(35.-fogStrength*29.))/(165.-fogStrength*144.),0.,.94);}";
 const frag='precision mediump float;uniform vec3 fogColor;varying vec3 color;varying float fog;void main(){gl_FragColor=vec4(mix(color,fogColor,fog),1.);}';
 function shader(type,src){let s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
 let prog;try{prog=gl.createProgram();gl.attachShader(prog,shader(gl.VERTEX_SHADER,vert));gl.attachShader(prog,shader(gl.FRAGMENT_SHADER,frag));gl.linkProgram(prog);if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(prog));}catch(e){status.textContent='Graphics failed: '+e.message;return;}gl.useProgram(prog);
@@ -746,11 +746,38 @@ for(let i=0;i<14;i++){
   box(x,y,z,w,h,w*.85,[.42,.44,.40]);
   solidBox(x,z,w,w*.85,h);
 }
+
+// Cloud volume meshes, depth tested and controlled by actual cloud coverage.
+function cloudEllipsoid(x,y,z,rx,ry,rz,threshold,shade){
+ const lat=4,lon=8,k=[2.0,threshold,shade];
+ const pt=(t,a)=>[x+rx*Math.cos(t)*Math.cos(a),y+ry*Math.sin(t),z+rz*Math.cos(t)*Math.sin(a)];
+ for(let j=0;j<lat;j++)for(let i=0;i<lon;i++){
+  const t0=-Math.PI/2+j*Math.PI/lat,t1=-Math.PI/2+(j+1)*Math.PI/lat,a=i*Math.PI*2/lon,b=(i+1)*Math.PI*2/lon;
+  const p0=pt(t0,a),p1=pt(t0,b),p2=pt(t1,b),p3=pt(t1,a);
+  tri(p0,p1,p2,k);tri(p0,p2,p3,k);
+ }
+}
+for(let i=0;i<88;i++){
+ const r=35+Math.sqrt(rnd(850+i*13))*157,a=i*2.399963229728653,x=Math.cos(a)*r,z=Math.sin(a)*r;
+ const high=46+rnd(i*91+318)*43,width=8+rnd(i*83+442)*13,threshold=rnd(i*43+929);
+ for(let j=0;j<4;j++){
+  const xOff=(rnd(i*19+j*9+292)-.5)*width*1.1,zOff=(rnd(i*29+j*17+292)-.5)*width*.65;
+  cloudEllipsoid(x+xOff,high+(rnd(i*7+j*11+422)-.5)*3.4,z+zOff,width*(.67+.23*rnd(i+j+521)),2.1+rnd(i+j*5+67)*2.7,width*(.38+.12*rnd(i+j*3+727)),threshold,.75+rnd(i*7+j+11)*.2);
+ }
+}
+// Shallow puddle meshes become visible only on wet days.
+for(let i=0;i<38;i++){
+ const x=(rnd(i*83+660)-.5)*53,z=(rnd(i*53+557)-.5)*53;
+ if(Math.hypot(x+55,z+42)<25||Math.hypot(x,z)<4)continue;
+ const y=ground(x,z)+.035,r=.28+rnd(i+812)*.7,k=[3.0,.20+rnd(i*5+37)*.28,.8];
+ for(let j=0;j<10;j++){const a=j*2*Math.PI/10,b=(j+1)*2*Math.PI/10;tri([x,y,z],[x+Math.cos(a)*r,y,z+Math.sin(a)*r*.55],[x+Math.cos(b)*r,y,z+Math.sin(b)*r*.55],k);}
+}
+
 let count=positions.length/3,buf=new Float32Array(count*9);for(let i=0;i<count;i++)for(let j=0;j<3;j++){buf[i*9+j]=positions[i*3+j];buf[i*9+j+3]=colors[i*3+j];buf[i*9+j+6]=normals[i*3+j];}
 let buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,buf,gl.DYNAMIC_DRAW);for(const [name,offset] of [['p',0],['c',3],['n',6]]){let loc=gl.getAttribLocation(prog,name);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,3,gl.FLOAT,false,36,offset*4);}
 gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.clearColor(.68,.81,.89,1);
 const projLoc=gl.getUniformLocation(prog,'proj'),viewLoc=gl.getUniformLocation(prog,'view');
-const daylightLoc=gl.getUniformLocation(prog,'daylight'),sunDirLoc=gl.getUniformLocation(prog,'sunDir'),cloudDimLoc=gl.getUniformLocation(prog,'cloudDim'),fogColorLoc=gl.getUniformLocation(prog,'fogColor'),fireGlowLoc=gl.getUniformLocation(prog,'fireGlow'),seasonToneLoc=gl.getUniformLocation(prog,'seasonTone');
+const daylightLoc=gl.getUniformLocation(prog,'daylight'),sunDirLoc=gl.getUniformLocation(prog,'sunDir'),cloudDimLoc=gl.getUniformLocation(prog,'cloudDim'),fogColorLoc=gl.getUniformLocation(prog,'fogColor'),fireGlowLoc=gl.getUniformLocation(prog,'fireGlow'),seasonToneLoc=gl.getUniformLocation(prog,'seasonTone'),windStrengthLoc=gl.getUniformLocation(prog,'windStrength'),windHeadingLoc=gl.getUniformLocation(prog,'windHeading'),weatherTimeLoc=gl.getUniformLocation(prog,'weatherTime'),wetnessLoc=gl.getUniformLocation(prog,'wetness'),snowCoverLoc=gl.getUniformLocation(prog,'snowCover'),fogStrengthLoc=gl.getUniformLocation(prog,'fogStrength');
 // Woodland wildlife uses its own tiny GPU buffer. Movement happens in the
 // vertex shader so deer, rabbits and boar wander without rebuilding the world.
 const animalShiftLoc=gl.getUniformLocation(prog,'animalShift'),
@@ -1921,7 +1948,7 @@ const celestialOrb=document.getElementById('sunMoon');
 const ukDateTime=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'});
 const ukDateLabel=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',weekday:'short',day:'numeric',month:'short',year:'numeric'});
 let weatherForecast=null,weatherUpdatedAt=0,weatherLastAttempt=0,weatherPending=false,weatherFailure=false;
-const currentConditions={cloud:35,rain:0,snow:0,code:2,temp:null,wind:0,source:'loading'};
+const currentConditions={cloud:35,rain:0,snow:0,code:2,temp:null,wind:0,windDirection:240,humidity:70,source:'loading'};
 function clamp01(v){return Math.max(0,Math.min(1,v));}
 function ukDayKey(date){const parts=ukDateTime.formatToParts(date);const obj={};for(const p of parts)obj[p.type]=p.value;return obj.year+'-'+obj.month+'-'+obj.day;}
 function ukSeason(date){const month=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',month:'numeric'}).format(date));return month>=3&&month<=5?'Spring':month>=6&&month<=8?'Summer':month>=9&&month<=11?'Autumn':'Winter';}
@@ -1951,10 +1978,12 @@ function applyWeather(date){
  currentConditions.code=read('weather_code',2);
  currentConditions.temp=read('temperature_2m',null);
  currentConditions.wind=read('wind_speed_10m',0);
+ currentConditions.windDirection=read('wind_direction_10m',240);
+ currentConditions.humidity=read('relative_humidity_2m',70);
  currentConditions.source='forecast';
  const recent=Date.now()-weatherUpdatedAt<960000?weatherForecast.current:null;
  if(recent){
-  for(const [key,target] of [['cloud_cover','cloud'],['precipitation','rain'],['snowfall','snow'],['weather_code','code'],['temperature_2m','temp'],['wind_speed_10m','wind']]){
+  for(const [key,target] of [['cloud_cover','cloud'],['precipitation','rain'],['snowfall','snow'],['weather_code','code'],['temperature_2m','temp'],['wind_speed_10m','wind'],['wind_direction_10m','windDirection'],['relative_humidity_2m','humidity']]){
    if(Number.isFinite(recent[key]))currentConditions[target]=recent[key];
   }
   currentConditions.source='current';
@@ -2006,7 +2035,7 @@ async function fetchBournemouthWeather(){
  if(weatherPending)return;
  weatherPending=true;weatherLastAttempt=Date.now();
  // Hourly forecasts use Unix timestamps to avoid GMT/BST ambiguity.
- const url='https://api.open-meteo.com/v1/forecast?latitude=50.7192&longitude=-1.8808&hourly=temperature_2m,precipitation,snowfall,weather_code,cloud_cover,wind_speed_10m&current=temperature_2m,precipitation,snowfall,weather_code,cloud_cover,wind_speed_10m&forecast_days=4&past_days=1&timezone=Europe%2FLondon&timeformat=unixtime';
+ const url='https://api.open-meteo.com/v1/forecast?latitude=50.7192&longitude=-1.8808&hourly=temperature_2m,precipitation,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,relative_humidity_2m&current=temperature_2m,precipitation,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,relative_humidity_2m&forecast_days=4&past_days=1&timezone=Europe%2FLondon&timeformat=unixtime';
  try{
   const response=await fetch(url,{cache:'no-store'});
   if(!response.ok)throw Error('Weather HTTP '+response.status);
@@ -2063,14 +2092,48 @@ function drawWeatherFX(dt,precip,mode,wind){
   weatherCtx.moveTo(x,y);weatherCtx.lineTo(x+(mode==='snow'?1:drift*7),y+(mode==='snow'?1:8+18*p.z));
  }
  weatherCtx.stroke();
+ if(mode==='rain'&&precip>.15){weatherCtx.fillStyle='rgba(213,232,247,.27)';
+ for(let i=0;i<Math.round(precip*20);i++){const p=drizzle[i+90],x=p.x*w,y=h*(.67+.29*p.y);weatherCtx.beginPath();weatherCtx.ellipse(x,y,1.5+2.2*p.z,.6+.8*p.z,0,0,Math.PI*2);weatherCtx.fill();}}
 }
+
+let wetGround=0,snowGround=0,lightningFlash=0,nextLightningAt=0,thunderDueAt=0,thunderAudioUnlocked=false,weatherStateFrames=0;
+try{const stored=JSON.parse(localStorage.getItem('woodland-camp-weather-ground-v1')||'null');if(stored&&Date.now()-stored.t<604800000){const elapsed=(Date.now()-stored.t)/3600000;wetGround=clamp01(stored.wet||0)*Math.exp(-elapsed*.18);snowGround=clamp01(stored.snow||0)*Math.exp(-Math.max(0,elapsed-12)*.1);}}catch(_){}
+let thunderContext=null;
+document.addEventListener('pointerdown',()=>{thunderAudioUnlocked=true;},{passive:true});
+function playDistantThunder(){
+ if(!thunderAudioUnlocked)return;
+ try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;if(!thunderContext)thunderContext=new AC();if(thunderContext.state==='suspended')thunderContext.resume();
+ const context=thunderContext,len=Math.round(context.sampleRate*2.6),buffer=context.createBuffer(1,len,context.sampleRate),samples=buffer.getChannelData(0);let rumble=0;
+ for(let i=0;i<len;i++){rumble=rumble*.995+(Math.random()*2-1)*.005;samples[i]=rumble;}
+ const source=context.createBufferSource(),lp=context.createBiquadFilter(),gain=context.createGain();lp.type='lowpass';lp.frequency.value=165;gain.gain.setValueAtTime(.001,context.currentTime);gain.gain.linearRampToValueAtTime(.25,context.currentTime+.2);gain.gain.exponentialRampToValueAtTime(.001,context.currentTime+2.6);source.buffer=buffer;source.connect(lp);lp.connect(gain);gain.connect(context.destination);source.start();source.stop(context.currentTime+2.6);
+ }catch(err){console.warn('Thunder audio unavailable',err);}
+}
+function weatherWetTick(dt){
+ const temp=Number.isFinite(currentConditions.temp)?currentConditions.temp:9,falling=currentConditions.rain;
+ wetGround=clamp01(wetGround+Math.max(0,falling)*dt*.004-(falling>.08?0:dt*(temp>15?.000075:.00004)));
+ const snowing=currentConditions.snow>.05||[71,73,75,77,85,86].includes(currentConditions.code);
+ snowGround=clamp01(snowGround+(snowing?dt*.00042:0)-(temp>1?dt*(temp>5?.00013:.00004):0));
+ const storm=currentConditions.code>=95,now=Date.now();
+ if(storm&&now>=nextLightningAt){lightningFlash=.62+.38*Math.random();thunderDueAt=now+1600+Math.random()*2300;nextLightningAt=now+18000+Math.random()*35000;}
+ if(thunderDueAt&&now>=thunderDueAt){thunderDueAt=0;playDistantThunder();}
+ lightningFlash=storm?Math.max(0,lightningFlash-dt*4.4):0;
+ if((++weatherStateFrames)%1800===1){try{localStorage.setItem('woodland-camp-weather-ground-v1',JSON.stringify({t:now,wet:wetGround,snow:snowGround}));}catch(_){}}
+}
+
 function updateAtmosphere(date,dt){
- const sun=solarDirection(date),cloud=clamp01(currentConditions.cloud/100);
+ weatherWetTick(dt);
+ const sun=solarDirection(date),cloud=clamp01(Math.max(currentConditions.cloud/100,currentConditions.code>=61&&currentConditions.code<=82?.73:0,currentConditions.code>=95?.88:0));
  const daylight=clamp01((sun.up+.085)*5.1);
  const overcast=cloud*.65;
  const twilight=clamp01((sun.up+.12)*5)-clamp01((sun.up-.03)*7);
  const top=[.025+.51*daylight*(1-overcast*.48)+twilight*.16,.038+.67*daylight*(1-overcast*.45)+twilight*.06,.075+.76*daylight*(1-overcast*.3)];
  const fog=[top[0]*.92+.02,top[1]*.93+.015,top[2]*.96+.01];
+ const fogAmount=[45,48].includes(currentConditions.code)?1:clamp01((currentConditions.humidity-88)/23)*.6;
+ const snowy=currentConditions.snow>.05||[71,73,75,77,85,86].includes(currentConditions.code);
+ const windRad=(currentConditions.windDirection+180)*Math.PI/180,windMagnitude=clamp01(currentConditions.wind/62);
+ gl.uniform1f(windStrengthLoc,windMagnitude);gl.uniform1f(windHeadingLoc,windRad);gl.uniform1f(weatherTimeLoc,performance.now()/1000);
+ gl.uniform1f(wetnessLoc,wetGround);gl.uniform1f(snowCoverLoc,snowGround);gl.uniform1f(fogStrengthLoc,fogAmount);
+ if(lightningFlash>0)for(let i=0;i<3;i++)top[i]=Math.min(.95,top[i]+lightningFlash*.55);
  gl.clearColor(top[0],top[1],top[2],1);
  gl.uniform1f(daylightLoc,daylight);
  gl.uniform3f(sunDirLoc,sun.east,Math.max(.05,sun.up),-sun.north);
@@ -2091,13 +2154,20 @@ function updateAtmosphere(date,dt){
  celestialOrb.style.left=x+'px';celestialOrb.style.top=y+'px';
  if(sun.up>-.07){celestialOrb.style.background='#fff2b1';celestialOrb.style.boxShadow='0 0 26px 10px #ffe28a77,0 0 75px 30px #ffcd6650';}
  else{celestialOrb.style.background='#e1eafa';celestialOrb.style.boxShadow='0 0 19px 5px #ccdafa55';}
- const snow=currentConditions.snow>.1||[71,73,75,77,85,86].includes(currentConditions.code);
+ const snow=snowy;
  const precipitation=snow?Math.max(.2,currentConditions.snow*.5):Math.max(0,currentConditions.rain);
  drawWeatherFX(dt,Math.min(1,precipitation/1.5),snow?'snow':'rain',currentConditions.wind);
+ if(ukSeason(date)==='Autumn'&&currentConditions.wind>6&&weatherCtx&&currentConditions.rain<.7){
+ weatherCtx.fillStyle='rgba(194,128,55,.54)';for(let i=0;i<Math.min(18,Math.floor(currentConditions.wind/3));i++){
+ const p=drizzle[130+i],vx=Math.sin(performance.now()*.0004+i)*.08;
+ const x=((p.x+performance.now()*.000017*(.3+currentConditions.wind/50)+vx)%1)*innerWidth;
+ const y=((p.y+performance.now()*.000011*(.4+p.z))%1)*innerHeight;weatherCtx.fillRect(x,y,2.4,1.8);
+ }}
+
 }
 
 function frame(t){try{let dt=Math.min(.05,(t-last)/1000);last=t;let forward=axis[1]+(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0),right=axis[0]+(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0),m=Math.hypot(forward,right);if(m>1){forward/=m;right/=m;}if(desktopMenuOpen||boardIsOpen||storageOpen){forward=0;right=0;}let speed=(fly?18:6.5)*dt;const dx=(Math.sin(yaw)*forward+Math.cos(yaw)*right)*speed,dz=(-Math.cos(yaw)*forward+Math.sin(yaw)*right)*speed;if(fly){if(storageOpen)closeStorage();if(chopJob){chopJob=null;document.getElementById('chopProgress').style.display='none';}seatedAt=null;seatEyePosition=null;seatExitPosition=null;camera[0]=Math.max(-93,Math.min(93,camera[0]+dx));camera[2]=Math.max(-93,Math.min(93,camera[2]+dz));camera[1]+=Math.sin(pitch)*forward*speed;camera[1]=Math.max(walkingHeight(camera[0],camera[2])+eyeHeight,camera[1]);}else {const steps=world.tentSleeping||seatedAt||chopJob||storageOpen||boardIsOpen?0:Math.max(1,Math.ceil(Math.hypot(dx,dz)/.25));for(let i=0;i<steps;i++){const sx=dx/steps,sz=dz/steps;if(!blocked(camera[0]+sx,camera[2]))camera[0]+=sx;if(!blocked(camera[0],camera[2]+sz))camera[2]+=sz;}camera[1]+=((seatedAt&&seatEyePosition?seatEyePosition[1]:walkingHeight(camera[0],camera[2])+(world.tentSleeping?.85:eyeHeight))-camera[1])*.20;}
-let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v3.2 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
+let w=innerWidth,h=innerHeight,dpr=Math.min(devicePixelRatio||1,coarsePointer.matches?1.35:1.5),pw=Math.floor(w*dpr),ph=Math.floor(h*dpr);if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph);}if(Math.floor(Date.now()/1000)!==lastWeatherClock){const now=new Date();lastWeatherClock=Math.floor(now.getTime()/1000);applyWeather(now);displayWeather(now);if(Date.now()-Math.max(weatherUpdatedAt,weatherLastAttempt)>1200000)fetchBournemouthWeather();}updateAtmosphere(new Date(),dt);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.uniformMatrix4fv(projLoc,false,perspective(coarsePointer.matches?1.12*1.15:1.12,w/h,.1,300));gl.uniformMatrix4fv(viewLoc,false,view(camera,yaw,pitch));gl.drawArrays(gl.TRIANGLES,0,fireFlameStart);updateFireFuel();if(world.fireLit)gl.drawArrays(gl.TRIANGLES,fireFlameStart,fireFlameEnd-fireFlameStart);gl.drawArrays(gl.TRIANGLES,fireFlameEnd,showerWaterStart-fireFlameEnd);if(world.showerOn)gl.drawArrays(gl.TRIANGLES,showerWaterStart,showerWaterEnd-showerWaterStart);gl.drawArrays(gl.TRIANGLES,showerWaterEnd,count-showerWaterEnd);advanceWoodlandAnimals(dt,t);drawWoodlandAnimals(t);advanceChopping(t);if(++frameNumber%12===1)updateNearby();if(frameNumber%30===0&&(nearby==='cook'||nearby==='fire')&&(!desktopMode()||desktopMenuOpen))renderInteraction();if(toast.style.display==='block'&&performance.now()>Number(toast.dataset.until))toast.style.display='none';if(frameNumber%60===1){let err=gl.getError();diag.textContent='v4.0 | '+(fly?'FLY (no collision)':'WALK (solid)')+' | Objects '+obstacles.length+' | Hits '+collisionHits+' | GL '+err;}requestAnimationFrame(frame);}catch(e){diag.textContent='RENDER ERROR: '+e.message;diag.style.background='#992323';console.error(e);}}
 requestAnimationFrame(frame);
 })();
 </script></body></html>
