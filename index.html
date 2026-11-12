@@ -253,11 +253,7 @@ function quad(a,b,c,d,k){tri(a,b,c,k);tri(a,c,d,k);}
 function rnd(n){let a=Math.sin(n*127.1+78.2)*43758.5453;return a-Math.floor(a);}
 // Three compacted footpaths lead from the clearing into the woods.
 // The west trail reaches the shoreline; the other two remain exploratory.
-const woodlandPaths=[
- [[-13,11],[-18,10],[-25,5],[-29,-3],[-31,-13],[-36,-22],[-42,-32]],
- [[6,12],[15,16],[25,18],[33,18],[42,23],[51,26]],
- [[-2,14],[-7,24],[-12,32],[-17,41],[-19,48]]
-];
+const woodlandPaths=[]; // No pre-drawn trails: paths are now placed using editable gravel tiles.
 function pathDistance(x,z){
  let best=Infinity;
  for(const path of woodlandPaths)for(let i=1;i<path.length;i++){
